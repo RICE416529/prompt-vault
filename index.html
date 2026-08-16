@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>提示词收藏库 · Prompt Vault</title>
+<title>AI 创作库 · Vault Studio</title>
 <style>
   :root{
     --bg:#0d0d0f; --bg2:#141417; --panel:#1a1a1f; --panel2:#202027;
@@ -178,15 +178,22 @@
   .blk-c.added{animation:flash 1s ease}
   /* 收藏库缩略图可点击放大 */
   .thumb{cursor:zoom-in}
+  /* 资产库 */
+  .nav-sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+  .am-images{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+  .pal-row input,.pal-row select{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px}
+  .asset-card .body .prompt-snippet{border:0;padding:0}
 </style>
 </head>
 <body>
 <header>
   <div class="nav">
-    <div class="brand">提示词<b>收藏库</b><small>Prompt Vault</small></div>
+    <div class="brand">AI 创作<b>库</b><small>Vault Studio</small></div>
     <button class="tab active" data-view="captures">📥 收藏库</button>
     <button class="tab" data-view="composer">🛠 拼装台</button>
     <button class="tab" data-view="gallery">🖼 图库</button>
+    <span class="nav-sep"></span>
+    <button class="tab" data-view="assets">🎬 资产库</button>
     <button class="tab" data-view="data">💾 数据</button>
   </div>
 </header>
@@ -288,6 +295,24 @@
     </div>
     <div class="grid" id="gallery-grid"></div>
   </section>
+  <!-- 资产库 -->
+  <section id="view-assets" hidden>
+    <div class="toolbar">
+      <select id="asset-project" title="选择项目 / 影片"></select>
+      <button class="btn" id="asset-new-project">＋ 项目</button>
+      <select id="asset-parent" style="min-width:150px" title="按父级(角色)筛选"><option value="">全部角色</option></select>
+      <div class="spacer"></div>
+      <button class="btn primary" id="asset-add">＋ 新建资产</button>
+      <button class="btn" id="asset-export">📤 导出 Briefing</button>
+    </div>
+    <div class="cat-tabs" id="asset-cat-tabs" style="margin-bottom:14px"></div>
+    <div class="toolbar" style="margin-bottom:14px">
+      <input id="asset-search" placeholder="搜索资产名 / 用途 / 标签…" style="min-width:240px">
+      <div class="spacer"></div>
+      <span class="meta" id="asset-count"></span>
+    </div>
+    <div class="grid" id="asset-grid"></div>
+  </section>
 </main>
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
@@ -325,11 +350,11 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=1;
+const DB_NAME='promptvault', DB_VER=2;
 let db;
 function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);
   r.onupgradeneeded=e=>{const d=e.target.result;
-    ['captures','blocks','meta'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'});});};
+    ['captures','blocks','meta','assets','projects'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'});});};
   r.onsuccess=e=>{db=e.target.result;res();};r.onerror=e=>rej(e.target.error);});}
 function st(name,mode){return db.transaction(name,mode).objectStore(name);}
 function getAll(name){return new Promise((res,rej)=>{const r=st(name,'readonly').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
@@ -339,7 +364,7 @@ function delOne(name,key){return new Promise((res,rej)=>{const r=st(name,'readwr
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 /* ============ 状态 ============ */
-const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'' };
+const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'', assetProject:'', assetCat:'all', assetParent:'' };
 let mediaUrls = [];
 let composerMap = {};
 function revokeMedia(){ mediaUrls.forEach(u=>URL.revokeObjectURL(u)); mediaUrls=[]; }
@@ -606,14 +631,15 @@ function openLightbox(cid,hasP){
 }
 
 /* ============ 视图切换 ============ */
-function setView(v){
+async function setView(v){
   state.view=v;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
-  ['captures','composer','data','gallery'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
+  ['captures','composer','data','gallery','assets'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
   if(v==='captures')renderCaptures();
   if(v==='composer')renderComposer();
   if(v==='data')renderData();
   if(v==='gallery')renderGallery();
+  if(v==='assets'){ await populateProjects(); renderAssetCatTabs(); await populateAssetParents(); renderAssets(); }
 }
 function goToSource(sourceId){ state.highlightId=sourceId; setView('captures'); }
 
@@ -1165,6 +1191,329 @@ document.getElementById('clear-btn').addEventListener('click',async()=>{
 function blobToDataURL(b){return new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b);});}
 function dataURLToBlob(u){return fetch(u).then(r=>r.blob());}
 
+/* ============ 资产库 ============ */
+const ASSET_CATS = [
+  {id:'character', name:'人物', icon:'🧑', parent:'', hint:'角色身份资产：四视图 / 双头像+服装正背面'},
+  {id:'costume', name:'妆造', icon:'👗', parent:'所属角色', hint:'同一角色的换装版本，每套一张四视图'},
+  {id:'expression', name:'表情动作', icon:'🎭', parent:'所属角色', hint:'表情九/十六宫格 + 动作16宫格图鉴'},
+  {id:'scene', name:'场景', icon:'🏞', parent:'', hint:'九宫格：8角度 + 1平面布局'},
+  {id:'prop', name:'道具', icon:'🎒', parent:'', hint:'实体三视图 / 虚拟16宫格'},
+  {id:'palette', name:'色板', icon:'🎨', parent:'', hint:'7色块：类型 / HEX / 使用场景'},
+];
+const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
+let assetMediaUrls=[];
+function revokeAssetMedia(){assetMediaUrls.forEach(u=>URL.revokeObjectURL(u));assetMediaUrls=[];}
+function defaultPaletteColors(){
+  return [
+    {type:'主色',hex:'#1b2a4a',usage:'环境背景/整体基调'},
+    {type:'辅助色',hex:'#c9d6e3',usage:'人物服装/中等面积'},
+    {type:'暗部色',hex:'#0d1420',usage:'阴影/空间边缘'},
+    {type:'高光色',hex:'#ffe9c7',usage:'光源/反光/受光面'},
+    {type:'肤色区',hex:'#e8b998',usage:'人物面部/手部受光'},
+    {type:'环境反射色',hex:'#3a4a5a',usage:'墙面/地面反光'},
+    {type:'点缀色',hex:'#e63950',usage:'小面积视觉焦点'},
+  ];
+}
+function tplCallout(cat,a){
+  a=a||{};
+  switch(cat){
+    case 'character': return `这张图是【${a.name||'角色'}】的人物身份资产，用来在后续生成中保持脸部特征、发型、身材比例和整体气质一致。`;
+    case 'costume': return `这张图是【${a.name||'造型'}】的妆造资产（属角色【${a.parent||'—'}】），用于保持本场戏服装、鞋子、配饰和整体穿搭一致。`;
+    case 'expression': return `这张图是【${a.name||'角色'}】的表情/动作资产，本镜头参考其中「${(a.detail&&a.detail.list)||'指定情绪'}」的状态，表情/动作要克制、符合角色气质，不要变脸或崩坏。`;
+    case 'scene': return `这张图是【${a.name||'场景'}】的场景资产，作为本片视觉锚定：门/窗/家具的空间位置、光线方向需前后保持一致。`;
+    case 'prop': { const v=a.detail&&a.detail.propType==='virtual'; return `这张图是【${a.name||'道具'}】的道具资产（${v?'虚拟技能/特效':'实体'}），用于保持${v?'招式形态与轨迹':'形状、颜色、材质'}一致。本镜头中${a.detail&&a.detail.placement||'按场景摆放'}。`; }
+    case 'palette': return `这张图是整条视频的色板资产，统一画面色彩：主色用于环境背景，暗部色压暗空间边缘，高光色用于灯光反光，点缀色只小面积使用，避免高饱和霓虹。`;
+  }
+  return '';
+}
+async function populateProjects(){
+  const sel=document.getElementById('asset-project');
+  const projects=await getAll('projects');
+  sel.innerHTML='<option value="">全部项目</option>'+projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if(state.assetProject && projects.some(p=>p.id===state.assetProject)) sel.value=state.assetProject;
+  else if(projects.length){ state.assetProject=projects[0].id; sel.value=state.assetProject; }
+  else { state.assetProject=''; }
+}
+async function populateAssetParents(){
+  const sel=document.getElementById('asset-parent');
+  const needParent=['costume','expression'].includes(state.assetCat);
+  sel.style.display=needParent?'':'none';
+  if(!needParent){sel.value='';return;}
+  const assets=await getAll('assets');
+  const parents=[...new Set(assets.filter(a=>a.category==='character'&&a.name).map(a=>a.name))];
+  sel.innerHTML='<option value="">全部角色</option>'+parents.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  sel.value=state.assetParent||'';
+}
+function renderAssetCatTabs(){
+  const el=document.getElementById('asset-cat-tabs');
+  el.innerHTML=`<button class="cat-tab ${state.assetCat==='all'?'active':''}" data-cat="all">全部</button>`+
+    ASSET_CATS.map(c=>`<button class="cat-tab ${state.assetCat===c.id?'active':''}" data-cat="${c.id}">${c.icon} ${c.name}</button>`).join('');
+}
+async function renderAssets(){
+  revokeAssetMedia();
+  const grid=document.getElementById('asset-grid');
+  let assets=await getAll('assets');
+  if(state.assetProject) assets=assets.filter(a=>a.projectId===state.assetProject);
+  if(state.assetCat!=='all') assets=assets.filter(a=>a.category===state.assetCat);
+  if(state.assetParent) assets=assets.filter(a=>(a.parent||'')===state.assetParent);
+  const q=(document.getElementById('asset-search').value||'').toLowerCase();
+  if(q) assets=assets.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
+  assets.sort((a,b)=>b.createdAt-a.createdAt);
+  document.getElementById('asset-count').textContent=`共 ${assets.length} 个资产`;
+  if(!assets.length){
+    grid.innerHTML=`<div class="empty">这个分类下还没有资产。点「＋ 新建资产」开始建立你的 AI 视觉说明书吧。<br><span class="meta">建议：先建「人物」资产，再建「妆造/表情动作」并关联到该角色，层级更清晰。</span></div>`;
+    return;
+  }
+  grid.innerHTML=assets.map(a=>{
+    let thumb;
+    if(a.category==='palette'){
+      const cols=(a.detail&&a.detail.colors||[]).map(c=>`<span style="width:22px;height:40px;background:${esc(c.hex)};border:1px solid var(--border);display:inline-block"></span>`).join('');
+      thumb=`<div class="thumb" style="height:56px;display:flex;gap:3px;align-items:stretch;padding:8px;background:var(--bg2)">${cols||'<span class="ph">无色板</span>'}</div>`;
+    } else if(a.images&&a.images.length){
+      const im=a.images[0]; const u=im.blob?URL.createObjectURL(im.blob):im.url; assetMediaUrls.push(u);
+      thumb=`<div class="thumb"><img src="${u}" alt=""></div>`;
+    } else {
+      thumb=`<div class="thumb"><div class="ph">无图</div></div>`;
+    }
+    const parentBadge=a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:'';
+    const calloutBadge=a.callout?`<span class="badge">有调用标注</span>`:'';
+    return `<div class="card asset-card" data-aid="${a.id}">
+      ${thumb}
+      <div class="body">
+        <div class="row"><span class="badge" style="border-color:var(--accent)">${assetCatName(a.category)}</span>${parentBadge}${calloutBadge}</div>
+        <div class="prompt-snippet" style="max-height:54px"><b>${esc(a.name||'(未命名)')}</b></div>
+        <div class="prompt-snippet" style="color:#b9b9c0">${esc((a.purpose||'').slice(0,120))||'<span style="color:#666">（未填用途说明）</span>'}</div>
+        <div class="actions">
+          <button class="btn" data-act="view" data-id="${a.id}">查看</button>
+          <button class="btn" data-act="copy" data-id="${a.id}">复制标注</button>
+          <button class="btn danger" data-act="del" data-id="${a.id}">删除</button>
+        </div>
+      </div></div>`;
+  }).join('');
+}
+function openAssetModal(existing){
+  const isEdit=!!existing;
+  const a = existing || {id:uid(),projectId:state.assetProject,category:state.assetCat==='all'?'character':state.assetCat,name:'',parent:'',images:[],purpose:'',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
+  a.detail=a.detail||{};
+  if(a.category==='palette' && !a.detail.colors) a.detail.colors=defaultPaletteColors();
+  if(a.category==='prop' && !a.detail.propType) a.detail.propType='real';
+  if(a.category==='expression' && !a.detail.list) a.detail.list='';
+  const root=document.getElementById('modal-root');
+  const paletteRowsHtml = a.category==='palette' ? `<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>` : '';
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(840px,100%);max-height:92vh;display:flex;flex-direction:column">
+    <h3>${isEdit?'编辑资产':'新建资产'} <small id="am-cat-label"></small></h3>
+    <div class="mtab" style="overflow-y:auto;padding-right:6px">
+      <div class="field"><label>类型</label>
+        <select id="am-cat" ${isEdit?'disabled':''}>${ASSET_CATS.map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
+        <div class="paste-hint" id="am-cat-hint"></div>
+      </div>
+      <div class="field"><label>名称</label><input id="am-name" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"></div>
+      <div class="field" id="am-parent-field" style="display:${(a.category==='costume'||a.category==='expression')?'':'none'}"><label>所属角色</label><input id="am-parent" style="width:100%" value="${esc(a.parent)}" placeholder="填写已建「人物」资产的名称，如：林晚"></div>
+      <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
+        <div id="am-images" class="am-images"></div>
+        <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
+        <div class="paste-hint">在别处复制图片后，聚焦此窗口按 Ctrl+V 即可粘入。</div>
+      </div>
+      <div class="field"><label>用途说明（这张资产是干什么的）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea></div>
+      <div class="field"><label>生成工具 / 来源</label><input id="am-tool" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图"></div>
+      <div class="field"><label>生成提示词（可选，方便复现）</label><textarea id="am-gen" placeholder="当时用的提示词…">${esc(a.genPrompt)}</textarea></div>
+      <div id="am-detail">${paletteRowsHtml}</div>
+      <div class="field"><label>调用标注（喂给视频模型时复制这段话）</label><textarea id="am-callout" placeholder="自动生成，可修改">${esc(a.callout)}</textarea>
+        <button class="btn" id="am-gen-callout" style="margin-top:6px">↺ 按模板重新生成标注</button>
+      </div>
+      <div class="field"><label>标签（逗号分隔）</label><input id="am-tags" style="width:100%" value="${esc((a.tags||[]).join(', '))}"></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" id="am-save">${isEdit?'保存修改':'创建资产'}</button>
+    </div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');
+  overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+
+  function renderPaletteRows(){
+    const wrap=document.getElementById('pal-rows'); if(!wrap) return;
+    wrap.innerHTML=(a.detail.colors||[]).map((c,i)=>`
+      <div class="pal-row" data-i="${i}" style="display:grid;grid-template-columns:110px 150px 1fr 30px;gap:8px;margin-bottom:8px;align-items:center">
+        <select class="pal-type">${['主色','辅助色','暗部色','高光色','肤色区','环境反射色','点缀色'].map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('')}</select>
+        <span style="display:flex;gap:4px;align-items:center"><input class="pal-hex" type="color" value="${esc(c.hex)}" style="width:34px;height:30px;padding:0;border:1px solid var(--border);background:var(--bg2)"><input class="pal-hextext" value="${esc(c.hex)}" style="width:78px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px"></span>
+        <input class="pal-usage" value="${esc(c.usage)}" placeholder="使用场景，如：环境背景/暗部" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px">
+        <button class="btn pal-del" style="padding:3px 8px">✕</button>
+      </div>`).join('');
+    wrap.querySelectorAll('.pal-row').forEach(row=>{
+      const i=+row.dataset.i;
+      row.querySelector('.pal-type').addEventListener('change',e=>a.detail.colors[i].type=e.target.value);
+      row.querySelector('.pal-hex').addEventListener('input',e=>{a.detail.colors[i].hex=e.target.value;row.querySelector('.pal-hextext').value=e.target.value;});
+      row.querySelector('.pal-hextext').addEventListener('input',e=>{a.detail.colors[i].hex=e.target.value;row.querySelector('.pal-hex').value=e.target.value;});
+      row.querySelector('.pal-usage').addEventListener('input',e=>a.detail.colors[i].usage=e.target.value);
+      row.querySelector('.pal-del').addEventListener('click',()=>{a.detail.colors.splice(i,1);renderPaletteRows();});
+    });
+  }
+  if(a.category==='palette') renderPaletteRows();
+  const palAdd=document.getElementById('pal-add');
+  if(palAdd) palAdd.addEventListener('click',()=>{a.detail.colors.push({type:'点缀色',hex:'#888888',usage:''});renderPaletteRows();});
+
+  // images
+  let images=a.images||[];
+  const imgBox=document.getElementById('am-images');
+  function renderImages(){
+    imgBox.innerHTML=images.map((im,i)=>{
+      const u=im.blob?URL.createObjectURL(im.blob):(im.url||'');
+      return `<div class="am-img" data-i="${i}" style="display:inline-block;position:relative;margin:4px;border:1px solid var(--border);border-radius:8px;overflow:hidden;vertical-align:top">
+        <img src="${u}" style="width:90px;height:90px;object-fit:cover;display:block">
+        <input class="am-cap" value="${esc(im.caption||'')}" placeholder="说明" style="width:90px;font-size:10px;border:0;border-top:1px solid var(--border);background:var(--bg2);color:var(--text);padding:2px 4px">
+        <button class="am-img-del" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:4px;cursor:pointer;padding:0 5px">×</button>
+      </div>`;}).join('');
+    imgBox.querySelectorAll('.am-img').forEach(el=>{
+      const i=+el.dataset.i;
+      el.querySelector('.am-cap').addEventListener('input',e=>images[i].caption=e.target.value);
+      el.querySelector('.am-img-del').addEventListener('click',()=>{images.splice(i,1);renderImages();});
+    });
+  }
+  function addImg(blob,url){ images.push(url?{blob:null,url,caption:''}:{blob,url:null,caption:''}); renderImages(); }
+  document.getElementById('am-file').addEventListener('change',e=>{[...e.target.files].forEach(f=>addImg(f));e.target.value='';});
+  document.getElementById('am-url').addEventListener('change',e=>{const u=e.target.value.trim();if(u)addImg(null,u);});
+  overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){addImg(f);toast('已粘贴图片');}break;}}});
+  renderImages();
+
+  function renderDetail(){
+    const cat=document.getElementById('am-cat').value;
+    const box=document.getElementById('am-detail');
+    if(cat==='palette'){
+      if(!a.detail.colors||!a.detail.colors.length) a.detail.colors=defaultPaletteColors();
+      box.innerHTML='<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>';
+      renderPaletteRows();
+      const pa=document.getElementById('pal-add'); if(pa) pa.addEventListener('click',()=>{a.detail.colors.push({type:'点缀色',hex:'#888888',usage:''});renderPaletteRows();});
+    } else if(cat==='expression'){
+      box.innerHTML='<div class="field"><label>表情/动作清单（逗号或换行分隔，用于调用标注引用）</label><textarea id="am-expr-list" placeholder="自然, 专注, 轻微微笑, 疑惑, 惊讶, 紧张, 疲惫, 生气, 释然">'+esc(a.detail.list||'')+'</textarea></div>';
+    } else if(cat==='prop'){
+      box.innerHTML='<div class="field"><label>道具类型</label><select id="am-prop-type"><option value="real" '+((a.detail.propType||'real')==='real'?'selected':'')+'>实体道具（三视图）</option><option value="virtual" '+(a.detail.propType==='virtual'?'selected':'')+'>虚拟道具/技能（16宫格）</option></select></div><div class="field"><label>本镜头摆放/使用说明</label><input id="am-placement" style="width:100%" value="'+esc(a.detail.placement||'')+'" placeholder="如：包包放在长椅，人物不手持"></div>';
+    } else if(cat==='scene'){
+      box.innerHTML='<div class="field"><label>空间布局要点（可选，写入调用标注）</label><textarea id="am-layout" placeholder="门在左侧、窗在右侧、茶几居中…">'+esc(a.detail.layout||'')+'</textarea></div>';
+    } else { box.innerHTML=''; }
+    const gc=document.getElementById('am-gen-callout'); if(gc) gc.addEventListener('click',()=>{
+      const c=document.getElementById('am-cat').value;
+      document.getElementById('am-callout').value=tplCallout(c,{name:document.getElementById('am-name').value,parent:document.getElementById('am-parent')?document.getElementById('am-parent').value:'',detail:a.detail});
+    });
+  }
+  function onCatChange(){
+    const cat=document.getElementById('am-cat').value;
+    const meta=ASSET_CATS.find(c=>c.id===cat);
+    document.getElementById('am-cat-label').textContent=meta?meta.name:'';
+    document.getElementById('am-cat-hint').textContent=meta?meta.hint:'';
+    document.getElementById('am-parent-field').style.display=(cat==='costume'||cat==='expression')?'':'none';
+    if(cat==='palette'){ if(!a.detail.colors||!a.detail.colors.length) a.detail.colors=defaultPaletteColors(); }
+    if(cat==='prop'){ a.detail.propType=a.detail.propType||'real'; }
+    if(cat==='expression'){ a.detail.list=a.detail.list||''; }
+    renderDetail();
+  }
+  document.getElementById('am-cat').addEventListener('change',onCatChange);
+  document.getElementById('am-gen-callout').addEventListener('click',()=>{
+    const cat=document.getElementById('am-cat').value;
+    document.getElementById('am-callout').value=tplCallout(cat,{name:document.getElementById('am-name').value,parent:document.getElementById('am-parent')?document.getElementById('am-parent').value:'',detail:a.detail});
+  });
+  document.getElementById('am-cat-label').textContent=ASSET_CATS.find(c=>c.id===a.category).name;
+  document.getElementById('am-cat-hint').textContent=ASSET_CATS.find(c=>c.id===a.category).hint;
+  renderDetail();
+  if(!a.callout) document.getElementById('am-callout').value=tplCallout(a.category,a);
+
+  document.getElementById('am-save').addEventListener('click',async()=>{
+    const cat=document.getElementById('am-cat').value;
+    a.category=cat;
+    a.name=document.getElementById('am-name').value.trim();
+    a.parent=document.getElementById('am-parent')?document.getElementById('am-parent').value.trim():'';
+    a.purpose=document.getElementById('am-purpose').value.trim();
+    a.tool=document.getElementById('am-tool').value.trim();
+    a.genPrompt=document.getElementById('am-gen').value.trim();
+    a.callout=document.getElementById('am-callout').value.trim();
+    a.tags=document.getElementById('am-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    if(cat==='expression'){a.detail.list=document.getElementById('am-expr-list')?document.getElementById('am-expr-list').value.trim():a.detail.list;}
+    if(cat==='scene'){a.detail.layout=document.getElementById('am-layout')?document.getElementById('am-layout').value.trim():a.detail.layout;}
+    if(cat==='prop'){a.detail.propType=document.getElementById('am-prop-type')?document.getElementById('am-prop-type').value:a.detail.propType;a.detail.placement=document.getElementById('am-placement')?document.getElementById('am-placement').value.trim():a.detail.placement;}
+    a.images=images.map(im=>({blob:im.blob||null,url:im.url||null,caption:im.caption||''}));
+    a.projectId=state.assetProject;
+    await putOne('assets',a);
+    closeModal();toast(isEdit?'已保存修改 ✓':'已创建资产 ✓');
+    renderAssets();populateAssetParents();
+  });
+}
+async function openExportBriefing(){
+  const project=state.assetProject;
+  const [assets,projects]=await Promise.all([getAll('assets'),getAll('projects')]);
+  let list=project?assets.filter(a=>a.projectId===project):assets;
+  const pname=project?(projects.find(p=>p.id===project)||{}).name||'项目':'全部项目';
+  let md=`# ${pname} · AI 资产 Briefing\n生成时间：${new Date().toLocaleString('zh-CN')}\n\n`;
+  for(const cat of ASSET_CATS){
+    const items=list.filter(a=>a.category===cat.id); if(!items.length) continue;
+    md+=`## ${cat.icon} ${cat.name}\n\n`;
+    for(const a of items){
+      md+=`- **${a.name||'(未命名)'}**${a.parent?`（${a.parent}）`:''}\n`;
+      if(a.purpose) md+=`  - 用途：${a.purpose}\n`;
+      if(a.category==='palette'&&a.detail&&a.detail.colors&&a.detail.colors.length){
+        md+=`  - 色板：`+a.detail.colors.map(c=>`${c.type} ${c.hex}（${c.usage||''}）`).join('；')+`\n`;
+      }
+      if(a.callout) md+=`  - 调用标注：${a.callout}\n`;
+      md+='\n';
+    }
+  }
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(780px,100%)">
+    <h3>📤 导出 Briefing <small>直接复制粘给视频模型</small></h3>
+    <textarea style="width:100%;min-height:340px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.6;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px" readonly>${esc(md)}</textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn" onclick="closeModal()">关闭</button>
+      <button class="btn primary" id="brief-copy">复制全部</button>
+    </div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  document.getElementById('brief-copy').addEventListener('click',()=>copyText(md));
+}
+function openNewProjectModal(){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(420px,100%)">
+    <h3>新建项目 / 影片</h3>
+    <div class="field"><label>项目名称</label><input id="np-name" style="width:100%" placeholder="如：悬疑短片·旧公寓" autofocus></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="np-save">创建</button></div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  document.getElementById('np-name').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('np-save').click();});
+  document.getElementById('np-save').addEventListener('click',async()=>{
+    const name=document.getElementById('np-name').value.trim();if(!name){toast('请输入名称');return;}
+    const p={id:uid(),name}; await putOne('projects',p); state.assetProject=p.id;
+    closeModal();await populateProjects();toast('已创建项目 ✓');renderAssets();
+  });
+}
+async function seedAssetsIfEmpty(){
+  const assets=await getAll('assets');if(assets.length)return;
+  const proj={id:uid(),name:'示例项目·悬疑短片'};
+  await putOne('projects',proj);
+  const pal={id:uid(),projectId:proj.id,category:'palette',name:'冷峻悬疑色板',parent:'',images:[],purpose:'整条短片统一色彩方向：冷峻、压抑、低饱和',tool:'从电影参考提取',genPrompt:'',callout:tplCallout('palette',{name:'冷峻悬疑色板'}),tags:['悬疑','冷色调'],detail:{colors:defaultPaletteColors()},createdAt:Date.now()};
+  await putOne('assets',pal);
+  const char={id:uid(),projectId:proj.id,category:'character',name:'女主·林晚',parent:'',images:[],purpose:'本片女主身份资产，保持脸部特征、发型、身材比例与清冷气质一致。',tool:'nanobanan pro',genPrompt:'',callout:tplCallout('character',{name:'林晚'}),tags:['女主'],detail:{},createdAt:Date.now()};
+  await putOne('assets',char);
+}
+// 资产库事件绑定
+document.getElementById('asset-add').addEventListener('click',()=>openAssetModal(null));
+document.getElementById('asset-export').addEventListener('click',openExportBriefing);
+document.getElementById('asset-new-project').addEventListener('click',openNewProjectModal);
+document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';populateAssetParents();renderAssets();});
+document.getElementById('asset-parent').addEventListener('change',e=>{state.assetParent=e.target.value;renderAssets();});
+document.getElementById('asset-search').addEventListener('input',renderAssets);
+document.getElementById('asset-cat-tabs').addEventListener('click',e=>{const t=e.target.closest('.cat-tab');if(!t)return;state.assetCat=t.dataset.cat;renderAssetCatTabs();populateAssetParents();renderAssets();});
+document.getElementById('asset-grid').addEventListener('click',async e=>{
+  const card=e.target.closest('.asset-card');if(!card)return;
+  const id=card.dataset.aid;
+  const btn=e.target.closest('button[data-act]');
+  if(btn){
+    const act=btn.dataset.act;
+    if(act==='view'){openAssetModal(await getOne('assets',id));}
+    else if(act==='copy'){const a=await getOne('assets',id);if(a&&a.callout)copyText(a.callout);else toast('该资产还没有调用标注');}
+    else if(act==='del'){if(confirm('确定删除这个资产？')){await delOne('assets',id);toast('已删除');renderAssets();populateAssetParents();}}
+    return;
+  }
+  openAssetModal(await getOne('assets',id));
+});
+
 /* ============ 启动 ============ */
 async function seedIfEmpty(){
   const caps=await getAll('captures');if(caps.length)return;
@@ -1196,6 +1545,9 @@ slow dolly in, gentle camera drift`,translation:
   await loadCategories();
   const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
   await seedIfEmpty();
+  await seedAssetsIfEmpty();
+  await populateProjects();
+  renderAssetCatTabs();
   setView('captures');
 })();
 </script>
