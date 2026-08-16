@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>AI 创作库 · Vault Studio</title>
 <style>
   :root{
@@ -399,13 +402,13 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2;
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17b';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
   dbReady = new Promise((res,rej)=>{
     if(typeof indexedDB==='undefined'){ rej(new Error('当前浏览器不支持本地数据库（IndexedDB）')); return; }
-    const r = indexedDB.open(DB_NAME, DB_VER);
+    let r; try { r = indexedDB.open(DB_NAME, DB_VER); } catch(e){ rej(e); return; }
     r.onupgradeneeded = e=>{
       const d = e.target.result;
       ['captures','blocks','meta','assets','projects'].forEach(s=>{
@@ -414,10 +417,12 @@ function openDB(){
     };
     r.onsuccess = e=>{ db=e.target.result; res(); };
     r.onerror   = e=>{ rej(e.target.error || new Error('数据库打开失败')); };
-    r.onblocked = ()=>{ rej(new Error('数据库被其他页面占用，请关闭其他打开的本页面标签页后刷新')); };
+    r.onblocked = ()=>{ rej(new Error('DB_BLOCKED')); };
   });
   return dbReady;
 }
+// 数据库被其他标签页占用导致打开失败时，重置后允许重试
+function reopenDB(){ dbReady=null; db=null; return openDB(); }
 // 任意 DB 操作都先等数据库真正就绪，避免 db 为 undefined 时读到 transaction 报错
 async function st(name,mode){ await dbReady; if(!db) throw new Error('数据库尚未就绪，请刷新页面'); return db.transaction(name,mode).objectStore(name); }
 async function getAll(name){ const s=await st(name,'readonly'); return new Promise((res,rej)=>{const r=s.getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}); }
@@ -426,6 +431,7 @@ async function putOne(name,v){ const s=await st(name,'readwrite'); return new Pr
 async function delOne(name,key){ const s=await st(name,'readwrite'); return new Promise((res,rej)=>{const r=s.delete(key);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);}); }
 // 脚本加载即开始打开数据库，确保之后任意时刻调用都有 dbReady 可等待
 dbReady = openDB();
+console.log('[VaultStudio]', APP_VER);
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 /* ============ 状态 ============ */
@@ -1815,22 +1821,42 @@ slow dolly in, gentle camera drift`,translation:
 window.addEventListener('error',e=>{ try{ toast('出错：'+(e.message||e.error||'未知错误')); }catch(_){} });
 window.addEventListener('unhandledrejection',e=>{ try{ const r=e.reason; toast('出错：'+((r&&r.message)||r||'未知错误')); }catch(_){} });
 
-(async()=>{
+/* 被其他标签页占用时，弹一条可重试的提示条，而不是让整个应用死掉 */
+function showBlockedBanner(){
+  let b=document.getElementById('db-blocked');
+  if(!b){
+    b=document.createElement('div'); b.id='db-blocked';
+    b.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#2a1320;border:1px solid #ff4d6d;color:#ffd9e2;padding:12px 16px;border-radius:10px;max-width:92%;box-shadow:0 6px 24px rgba(0,0,0,.5);font-size:13px;line-height:1.55';
+    document.body.appendChild(b);
+  }
+  b.innerHTML='⚠️ 数据库被其他打开的本页面标签页占用，导致无法加载数据。<br>请<b>关闭其他本页面的标签页</b>后点此重试：<button id="db-retry" style="margin-left:8px;padding:3px 12px;border:1px solid #ff5c8a;background:#ff5c8a;color:#1a1a1f;border-radius:6px;cursor:pointer">重试</button>';
+  b.querySelector('#db-retry').onclick=async()=>{
+    b.innerHTML='正在重试…';
+    try{ await reopenDB(); await initApp(); b.remove(); }
+    catch(e){ showBlockedBanner(); }
+  };
+}
+async function initApp(){
+  await loadCategories();
+  const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
+  await seedIfEmpty();
+  await seedAssetsIfEmpty();
+  await loadAssetPresets();
+  await populateProjects();
+  renderAssetCatTabs();
+  setView('captures');
+}
+async function boot(){
   try{
     await openDB();
-    await loadCategories();
-    const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
-    await seedIfEmpty();
-    await seedAssetsIfEmpty();
-    await loadAssetPresets();
-    await populateProjects();
-    renderAssetCatTabs();
-    setView('captures');
+    await initApp();
   }catch(err){
     console.error('初始化失败：',err);
-    toast('初始化失败：'+((err&&err.message)||err)+'（如持续失败，可尝试关闭其他标签页或清空本站的 IndexedDB 后刷新）');
+    if(err && err.message==='DB_BLOCKED'){ showBlockedBanner(); }
+    else { toast('初始化失败：'+((err&&err.message)||err)+'（如持续失败，可关闭其他本页面标签页后硬刷新，不要清除站点数据）'); }
   }
-})();
+}
+boot();
 </script>
 </body>
 </html>
