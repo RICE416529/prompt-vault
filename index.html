@@ -402,7 +402,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17b';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17c';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1409,6 +1409,7 @@ async function renderAssets(){
   if(state.assetCollection){
     const root=assets.find(a=>a.name===state.assetCollection && !a.parent);
     crumb.hidden=false;
+    document.getElementById('asset-add').textContent='＋ 新建资产';
     crumb.innerHTML=`<button class="btn" id="crumb-back">← 全部集</button><span class="crumb-name">${esc(state.assetCollection)}</span><span class="meta">· 素材集（画板式）</span>`;
     let children=assets.filter(a=>(a.parent||'')===state.assetCollection);
     if(q) children=children.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
@@ -1437,6 +1438,7 @@ async function renderAssets(){
 
   // ===== 集总览：根资产以封面卡片展示 =====
   crumb.hidden=true;
+  document.getElementById('asset-add').textContent='＋ 新建集';
   let roots=assets.filter(a=>!a.parent);
   if(state.assetCat!=='all') roots=roots.filter(a=>a.category===state.assetCat);
   if(q) roots=roots.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
@@ -1445,7 +1447,7 @@ async function renderAssets(){
   document.getElementById('asset-count').textContent=`共 ${roots.length} 个集 / 全部资产 ${assets.length} 个`;
   if(!roots.length){
     grid.className='';
-    grid.innerHTML=`<div class="empty">还没有任何「集」。先点「＋ 新建资产」创建人物 / 场景 / 道具，再在它下面挂子资产（三视图、配饰、多角度…）。<br><span class="meta">提示：进入一个集后，新建的资产会自动归入该集。</span></div>`;
+    grid.innerHTML=`<div class="empty">还没有任何「集」。先点「＋ 新建集」创建人物 / 场景 / 道具，再在它下面挂子资产（三视图、配饰、多角度…）。<br><span class="meta">提示：进入一个集后，新建的资产会自动归入该集。</span></div>`;
     return;
   }
   grid.className='grid mood-grid';
@@ -1455,6 +1457,7 @@ function openAssetModal(existing, presetParent){
   const isEdit=!!existing;
   const a = existing || {id:uid(),projectId:state.assetProject,category:state.assetCat==='all'?'character':state.assetCat,name:'',parent:'',images:[],purpose:'',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
   if(presetParent && !existing) a.parent=presetParent; // 在某集内新建时自动归入该集
+  const creatingCollection = !isEdit && !a.parent; // 总览页「新建集」：根资产，无所属集
   a.detail=a.detail||{};
   if(a.category==='palette' && !a.detail.colors) a.detail.colors=defaultPaletteColors();
   if(a.category==='prop' && !a.detail.propType) a.detail.propType='real';
@@ -1462,14 +1465,14 @@ function openAssetModal(existing, presetParent){
   const root=document.getElementById('modal-root');
   const paletteRowsHtml = a.category==='palette' ? `<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>` : '';
   root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(840px,100%);max-height:92vh;display:flex;flex-direction:column">
-    <h3>${isEdit?'编辑资产':'新建资产'} <small id="am-cat-label"></small></h3>
+    <h3>${isEdit?'编辑资产':(creatingCollection?'新建集':'新建资产')} <small id="am-cat-label"></small></h3>
     <div class="mtab" style="overflow-y:auto;padding-right:6px">
       <div class="field"><label>类型</label>
         <select id="am-cat" ${isEdit?'disabled':''}>${ASSET_CATS.map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
         <div class="paste-hint" id="am-cat-hint"></div>
       </div>
       <div class="field"><label>名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
-      <div class="field" id="am-parent-field" style="display:''"><label>所属集（选填：归入某个已建的人物 / 场景 / 道具，成为它的子资产）</label><input id="am-parent" list="am-parent-list" style="width:100%" value="${esc(a.parent)}" placeholder="如：林晚 / 旧公寓（留空则为独立「集」）"><datalist id="am-parent-list"></datalist></div>
+      <div class="field" id="am-parent-field" style="display:${creatingCollection?'none':''}"><label>所属集（选填：归入某个已建的人物 / 场景 / 道具，成为它的子资产）</label><input id="am-parent" list="am-parent-list" style="width:100%" value="${esc(a.parent)}" placeholder="如：林晚 / 旧公寓（留空则为独立「集」）"><datalist id="am-parent-list"></datalist></div>
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
         <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
@@ -1602,7 +1605,7 @@ function openAssetModal(existing, presetParent){
     const meta=ASSET_CATS.find(c=>c.id===cat);
     document.getElementById('am-cat-label').textContent=meta?meta.name:'';
     document.getElementById('am-cat-hint').textContent=meta?meta.hint:'';
-    document.getElementById('am-parent-field').style.display='';
+    document.getElementById('am-parent-field').style.display = creatingCollection ? 'none' : '';
     if(cat==='palette'){ if(!a.detail.colors||!a.detail.colors.length) a.detail.colors=defaultPaletteColors(); }
     if(cat==='prop'){ a.detail.propType=a.detail.propType||'real'; }
     if(cat==='expression'){ a.detail.list=a.detail.list||''; }
@@ -1770,7 +1773,10 @@ async function openAssetView(id){
   document.getElementById('av-edit').addEventListener('click',()=>{closeModal();openAssetModal(a);});
 }
 document.getElementById('asset-presets').addEventListener('click',openPresetManager);
-document.getElementById('asset-add').addEventListener('click',()=>openAssetModal(null, state.assetCollection||''));
+document.getElementById('asset-add').addEventListener('click',()=>{
+  if(state.assetCollection) openAssetModal(null, state.assetCollection); // 集内→新建资产，默认归入当前集
+  else openAssetModal(null, ''); // 总览→新建集（根资产，无所属集）
+});
 document.getElementById('asset-export').addEventListener('click',openExportBriefing);
 document.getElementById('asset-new-project').addEventListener('click',openNewProjectModal);
 document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';state.assetCollection='';populateAssetParents();renderAssets();});
