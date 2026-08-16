@@ -189,6 +189,47 @@
   .sug-chip:hover{border-color:var(--accent);color:var(--text)}
   .sug-chip.on{border-color:var(--accent);color:#fff;background:#2a1620}
   .sug-hint{font-size:11px;color:#777;margin-top:4px}
+  /* 资产库：层级集 / 画板 / 展示视图 */
+  .crumb{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .crumb-name{font-weight:600;font-size:15px}
+  .crumb .meta{color:var(--muted)}
+  .mood-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .collection-card,.mood-card{background:var(--panel2);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .1s;display:flex;flex-direction:column}
+  .collection-card:hover,.mood-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .m-thumb{background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0}
+  .collection-card .m-thumb{height:140px}
+  .mood-card .m-thumb{height:120px}
+  .m-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .m-thumb .ph{color:#666;font-size:12px}
+  .m-body{padding:9px 10px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .m-badges{display:flex;gap:5px;flex-wrap:wrap}
+  .m-name{font-size:13px;line-height:1.35;word-break:break-word}
+  .m-sub{font-size:11px;color:#9a9aa2;line-height:1.4;max-height:30px;overflow:hidden}
+  .m-body .actions{margin-top:auto;display:flex;gap:5px;flex-wrap:wrap}
+  .m-body .actions .btn{padding:3px 9px;font-size:11px}
+  .badge.set{background:#10221c;border-color:#3fae8e;color:#5fe3b6}
+  .badge.sub{background:#1c1430;border-color:#7c5cff;color:#b9a6ff}
+  .set-head{display:flex;gap:14px;align-items:center;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:6px}
+  .set-head .sh-thumb{width:118px;height:118px;flex-shrink:0;background:#000;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .set-head .sh-thumb img{width:100%;height:100%;object-fit:cover}
+  .set-head .sh-info{flex:1;min-width:0}
+  .set-head .sh-info h4{margin:0 0 6px;font-size:16px}
+  .set-label{font-size:12px;color:var(--muted);margin:10px 2px 8px}
+  /* 资产展示视图（查看） */
+  .av-stage{display:flex;justify-content:center;background:#000;border-radius:10px;padding:10px;max-height:46vh;overflow:hidden}
+  .av-stage img{width:100%;height:100%;max-height:46vh;object-fit:contain}
+  .av-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+  .av-thumbs img{width:64px;height:64px;object-fit:cover;border:2px solid var(--border);border-radius:6px;cursor:pointer;opacity:.55;transition:opacity .15s,border-color .15s}
+  .av-thumbs img:hover{opacity:.85}
+  .av-thumbs img.on{border-color:var(--accent);opacity:1}
+  .av-info{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .av-row{display:grid;grid-template-columns:78px 1fr auto;gap:8px;align-items:start;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  .av-k{color:var(--muted);font-size:12px;padding-top:2px}
+  .av-v{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  .av-v.callout{background:#1a1320;border-color:#3a2030;color:#ffd9e2}
+  .av-copy{padding:3px 9px;font-size:11px;align-self:start}
+  .av-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .av-tags .tag{font-size:11px;padding:2px 8px}
 </style>
 </head>
 <body>
@@ -306,7 +347,7 @@
     <div class="toolbar">
       <select id="asset-project" title="选择项目 / 影片"></select>
       <button class="btn" id="asset-new-project">＋ 项目</button>
-      <select id="asset-parent" style="min-width:150px" title="按父级(角色)筛选"><option value="">全部角色</option></select>
+      <select id="asset-parent" hidden><option value="">全部角色</option></select>
       <div class="spacer"></div>
       <button class="btn" id="asset-presets" title="管理新建资产时的输入建议">⚙ 预选项</button>
       <button class="btn primary" id="asset-add">＋ 新建资产</button>
@@ -318,6 +359,7 @@
       <div class="spacer"></div>
       <span class="meta" id="asset-count"></span>
     </div>
+    <div id="asset-crumb" hidden></div>
     <div class="grid" id="asset-grid"></div>
   </section>
 </main>
@@ -387,7 +429,7 @@ dbReady = openDB();
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 /* ============ 状态 ============ */
-const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'', assetProject:'', assetCat:'all', assetParent:'' };
+const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'', assetProject:'', assetCat:'all', assetParent:'', assetCollection:'' };
 let mediaUrls = [];
 let composerMap = {};
 function revokeMedia(){ mediaUrls.forEach(u=>URL.revokeObjectURL(u)); mediaUrls=[]; }
@@ -1296,65 +1338,117 @@ async function populateProjects(){
   else { state.assetProject=''; }
 }
 async function populateAssetParents(){
-  const sel=document.getElementById('asset-parent');
-  const needParent=['costume','expression'].includes(state.assetCat);
-  sel.style.display=needParent?'':'none';
-  if(!needParent){sel.value='';return;}
+  const sel=document.getElementById('asset-parent'); if(sel) sel.style.display='none'; // 改用「进入集」导航
+  // 收集所有「集」（无父级的资产）名称，供新建资产时选父级
   const assets=await getAll('assets');
-  const parents=[...new Set(assets.filter(a=>a.category==='character'&&a.name).map(a=>a.name))];
-  sel.innerHTML='<option value="">全部角色</option>'+parents.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  sel.value=state.assetParent||'';
+  assetCharNames=[...new Set(assets.filter(a=>!a.parent&&a.name).map(a=>a.name))];
 }
 function renderAssetCatTabs(){
   const el=document.getElementById('asset-cat-tabs');
   el.innerHTML=`<button class="cat-tab ${state.assetCat==='all'?'active':''}" data-cat="all">全部</button>`+
     ASSET_CATS.map(c=>`<button class="cat-tab ${state.assetCat===c.id?'active':''}" data-cat="${c.id}">${c.icon} ${c.name}</button>`).join('');
 }
+/* 缩略图：集封面 / 画板卡片通用 */
+function assetThumbHtml(a){
+  if(a.category==='palette'){
+    const cols=(a.detail&&a.detail.colors||[]);
+    const strip=cols.length?cols.map(c=>`<span style="flex:1;height:100%;background:${esc(c.hex)}"></span>`).join(''):'<span class="ph">无色板</span>';
+    return `<div class="m-thumb" style="padding:8px;background:var(--bg2)"><div style="display:flex;gap:3px;width:100%;height:100%">${strip}</div></div>`;
+  }
+  if(a.images&&a.images.length){
+    const im=a.images[0]; const u=im.blob?URL.createObjectURL(im.blob):im.url;
+    if(u){ assetMediaUrls.push(u); return `<div class="m-thumb"><img src="${u}" alt=""></div>`; }
+  }
+  return `<div class="m-thumb"><div class="ph">无图</div></div>`;
+}
+/* 集头部大图（展示视图用） */
+function assetHeadImg(a){
+  if(a&&a.images&&a.images.length){const im=a.images[0];const u=im.blob?URL.createObjectURL(im.blob):im.url;if(u){assetMediaUrls.push(u);return `<img src="${u}">`;}}
+  return `<span class="ph">无图</span>`;
+}
+function collectionCardHtml(a,cnt){
+  const c=(cnt&&cnt[a.name])||0;
+  const badges=`<span class="badge">${assetCatName(a.category)}</span><span class="badge set">集</span>${c?`<span class="badge sub">含 ${c} 个子资产</span>`:''}`;
+  return `<div class="collection-card" data-aid="${a.id}">
+    ${assetThumbHtml(a)}
+    <div class="m-body">
+      <div class="m-badges">${badges}</div>
+      <div class="m-name"><b>${esc(a.name||'(未命名)')}</b></div>
+      <div class="m-sub">${esc((a.purpose||'').slice(0,80))||'<span style="color:#666">（未填用途说明）</span>'}</div>
+      <div class="actions">
+        <button class="btn" data-act="open">进入集</button>
+        <button class="btn" data-act="view" data-id="${a.id}">查看</button>
+        <button class="btn danger" data-act="del" data-id="${a.id}">删除</button>
+      </div>
+    </div></div>`;
+}
+function moodCardHtml(a){
+  const badges=`<span class="badge">${assetCatName(a.category)}</span>${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
+  return `<div class="mood-card" data-aid="${a.id}">
+    ${assetThumbHtml(a)}
+    <div class="m-body">
+      <div class="m-badges">${badges}</div>
+      <div class="m-name">${esc(a.name||'(未命名)')}</div>
+    </div></div>`;
+}
 async function renderAssets(){
   revokeAssetMedia();
   const grid=document.getElementById('asset-grid');
+  const crumb=document.getElementById('asset-crumb');
   let assets=await getAll('assets');
   if(state.assetProject) assets=assets.filter(a=>a.projectId===state.assetProject);
-  if(state.assetCat!=='all') assets=assets.filter(a=>a.category===state.assetCat);
-  if(state.assetParent) assets=assets.filter(a=>(a.parent||'')===state.assetParent);
   const q=(document.getElementById('asset-search').value||'').toLowerCase();
-  if(q) assets=assets.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
-  assets.sort((a,b)=>b.createdAt-a.createdAt);
-  document.getElementById('asset-count').textContent=`共 ${assets.length} 个资产`;
-  if(!assets.length){
-    grid.innerHTML=`<div class="empty">这个分类下还没有资产。点「＋ 新建资产」开始建立你的 AI 视觉说明书吧。<br><span class="meta">建议：先建「人物」资产，再建「妆造/表情动作」并关联到该角色，层级更清晰。</span></div>`;
+
+  // ===== 集内视图：画板式紧凑展示 =====
+  if(state.assetCollection){
+    const root=assets.find(a=>a.name===state.assetCollection && !a.parent);
+    crumb.hidden=false;
+    crumb.innerHTML=`<button class="btn" id="crumb-back">← 全部集</button><span class="crumb-name">${esc(state.assetCollection)}</span><span class="meta">· 素材集（画板式）</span>`;
+    let children=assets.filter(a=>(a.parent||'')===state.assetCollection);
+    if(q) children=children.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
+    children.sort((a,b)=>b.createdAt-a.createdAt);
+    let html=`<div class="set-head">
+      <div class="sh-thumb">${assetHeadImg(root)}</div>
+      <div class="sh-info">
+        <h4>${esc((root&&root.name)||state.assetCollection)}</h4>
+        <div class="m-badges"><span class="badge">${assetCatName(root?root.category:'')}</span><span class="badge set">集</span></div>
+        <div class="m-sub" style="margin-top:6px">${esc((root&&root.purpose||'').slice(0,140))||'<span style="color:#666">（未填用途说明）</span>'}</div>
+        <div class="actions" style="margin-top:8px"><button class="btn" id="sh-view">查看集信息</button></div>
+      </div>
+    </div>`;
+    html+=`<div class="set-label">子资产（画板）· ${children.length} 个</div>`;
+    if(!children.length){
+      html+=`<div class="empty">这个集里还没有子资产。点「＋ 新建资产」，它会自动归入「${esc(state.assetCollection)}」。</div>`;
+    } else {
+      html+=`<div class="grid mood-grid">${children.map(moodCardHtml).join('')}</div>`;
+    }
+    grid.className='';
+    grid.innerHTML=html;
+    document.getElementById('crumb-back').addEventListener('click',()=>{state.assetCollection='';renderAssetCatTabs();renderAssets();});
+    const shv=document.getElementById('sh-view'); if(shv&&root) shv.addEventListener('click',()=>openAssetView(root.id));
     return;
   }
-  grid.innerHTML=assets.map(a=>{
-    let thumb;
-    if(a.category==='palette'){
-      const cols=(a.detail&&a.detail.colors||[]).map(c=>`<span style="width:22px;height:40px;background:${esc(c.hex)};border:1px solid var(--border);display:inline-block"></span>`).join('');
-      thumb=`<div class="thumb" style="height:56px;display:flex;gap:3px;align-items:stretch;padding:8px;background:var(--bg2)">${cols||'<span class="ph">无色板</span>'}</div>`;
-    } else if(a.images&&a.images.length){
-      const im=a.images[0]; const u=im.blob?URL.createObjectURL(im.blob):im.url; assetMediaUrls.push(u);
-      thumb=`<div class="thumb"><img src="${u}" alt=""></div>`;
-    } else {
-      thumb=`<div class="thumb"><div class="ph">无图</div></div>`;
-    }
-    const parentBadge=a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:'';
-    const calloutBadge=a.callout?`<span class="badge">有调用标注</span>`:'';
-    return `<div class="card asset-card" data-aid="${a.id}">
-      ${thumb}
-      <div class="body">
-        <div class="row"><span class="badge" style="border-color:var(--accent)">${assetCatName(a.category)}</span>${parentBadge}${calloutBadge}</div>
-        <div class="prompt-snippet" style="max-height:54px"><b>${esc(a.name||'(未命名)')}</b></div>
-        <div class="prompt-snippet" style="color:#b9b9c0">${esc((a.purpose||'').slice(0,120))||'<span style="color:#666">（未填用途说明）</span>'}</div>
-        <div class="actions">
-          <button class="btn" data-act="view" data-id="${a.id}">查看</button>
-          <button class="btn" data-act="copy" data-id="${a.id}">复制标注</button>
-          <button class="btn danger" data-act="del" data-id="${a.id}">删除</button>
-        </div>
-      </div></div>`;
-  }).join('');
+
+  // ===== 集总览：根资产以封面卡片展示 =====
+  crumb.hidden=true;
+  let roots=assets.filter(a=>!a.parent);
+  if(state.assetCat!=='all') roots=roots.filter(a=>a.category===state.assetCat);
+  if(q) roots=roots.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
+  roots.sort((a,b)=>b.createdAt-a.createdAt);
+  const childCount={}; assets.forEach(a=>{if(a.parent)childCount[a.parent]=(childCount[a.parent]||0)+1;});
+  document.getElementById('asset-count').textContent=`共 ${roots.length} 个集 / 全部资产 ${assets.length} 个`;
+  if(!roots.length){
+    grid.className='';
+    grid.innerHTML=`<div class="empty">还没有任何「集」。先点「＋ 新建资产」创建人物 / 场景 / 道具，再在它下面挂子资产（三视图、配饰、多角度…）。<br><span class="meta">提示：进入一个集后，新建的资产会自动归入该集。</span></div>`;
+    return;
+  }
+  grid.className='grid mood-grid';
+  grid.innerHTML=roots.map(a=>collectionCardHtml(a,childCount)).join('');
 }
-function openAssetModal(existing){
+function openAssetModal(existing, presetParent){
   const isEdit=!!existing;
   const a = existing || {id:uid(),projectId:state.assetProject,category:state.assetCat==='all'?'character':state.assetCat,name:'',parent:'',images:[],purpose:'',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
+  if(presetParent && !existing) a.parent=presetParent; // 在某集内新建时自动归入该集
   a.detail=a.detail||{};
   if(a.category==='palette' && !a.detail.colors) a.detail.colors=defaultPaletteColors();
   if(a.category==='prop' && !a.detail.propType) a.detail.propType='real';
@@ -1369,7 +1463,7 @@ function openAssetModal(existing){
         <div class="paste-hint" id="am-cat-hint"></div>
       </div>
       <div class="field"><label>名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
-      <div class="field" id="am-parent-field" style="display:${(a.category==='costume'||a.category==='expression')?'':'none'}"><label>所属角色</label><input id="am-parent" list="am-parent-list" style="width:100%" value="${esc(a.parent)}" placeholder="填写已建「人物」资产的名称，如：林晚"><datalist id="am-parent-list"></datalist></div>
+      <div class="field" id="am-parent-field" style="display:''"><label>所属集（选填：归入某个已建的人物 / 场景 / 道具，成为它的子资产）</label><input id="am-parent" list="am-parent-list" style="width:100%" value="${esc(a.parent)}" placeholder="如：林晚 / 旧公寓（留空则为独立「集」）"><datalist id="am-parent-list"></datalist></div>
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
         <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
@@ -1474,7 +1568,7 @@ function openAssetModal(existing){
     renderPurposeSuggestions();
   }
   // 异步拉取已建人物名，用于「所属角色」下拉
-  getAll('assets').then(list=>{ assetCharNames=[...new Set(list.filter(x=>x.category==='character'&&x.name).map(x=>x.name))]; if(document.getElementById('am-parent-list'))fillDatalist('am-parent-list',assetCharNames); }).catch(()=>{});
+  getAll('assets').then(list=>{ assetCharNames=[...new Set(list.filter(x=>!x.parent&&x.name).map(x=>x.name))]; if(document.getElementById('am-parent-list'))fillDatalist('am-parent-list',assetCharNames); }).catch(()=>{});
   try{ refreshSuggestions(); }catch(e){console.error('suggestions init',e);}
 
   function renderDetail(){
@@ -1502,7 +1596,7 @@ function openAssetModal(existing){
     const meta=ASSET_CATS.find(c=>c.id===cat);
     document.getElementById('am-cat-label').textContent=meta?meta.name:'';
     document.getElementById('am-cat-hint').textContent=meta?meta.hint:'';
-    document.getElementById('am-parent-field').style.display=(cat==='costume'||cat==='expression')?'':'none';
+    document.getElementById('am-parent-field').style.display='';
     if(cat==='palette'){ if(!a.detail.colors||!a.detail.colors.length) a.detail.colors=defaultPaletteColors(); }
     if(cat==='prop'){ a.detail.propType=a.detail.propType||'real'; }
     if(cat==='expression'){ a.detail.list=a.detail.list||''; }
@@ -1629,26 +1723,66 @@ function openPresetManager(){
     closeModal();toast('已保存预选项 ✓');
   });
 }
+/* 资产展示视图（查看）：图在上、信息在下、可复制，不再弹出输入表单 */
+async function openAssetView(id){
+  const a=await getOne('assets',id); if(!a)return;
+  const root=document.getElementById('modal-root');
+  const imgs=a.images||[];
+  const uOf=im=>{const u=im.blob?URL.createObjectURL(im.blob):(im.url||'');if(u)assetMediaUrls.push(u);return u;};
+  const firstU=imgs.length?uOf(imgs[0]):'';
+  const info=[
+    ['名称', a.name||'(未命名)'],
+    ['类型', assetCatName(a.category)],
+    ['所属集', a.parent||'—'],
+    ['用途说明', a.purpose||'（未填）'],
+    ['生成工具', a.tool||'（未填）'],
+    ['生成提示词', a.genPrompt||'（未填）'],
+  ];
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(880px,100%);max-height:92vh;display:flex;flex-direction:column">
+    <h3>${esc(a.name||'资产')} <small>${assetCatName(a.category)}</small></h3>
+    <div class="mtab" style="overflow-y:auto;padding-right:6px">
+      ${imgs.length?`<div class="av-stage"><img id="av-big" src="${firstU}" alt=""></div>`:`<div class="av-stage" style="color:#666;align-items:center">（该资产没有图片）</div>`}
+      ${imgs.length>1?`<div class="av-thumbs">${imgs.map((im,i)=>`<img data-i="${i}" class="${i===0?'on':''}" src="${uOf(im)}">`).join('')}</div>`:''}
+      <div class="av-info">
+        ${info.map(([k,v])=>`<div class="av-row"><div class="av-k">${k}</div><div class="av-v">${esc(v)}</div><button class="btn av-copy" data-copy="${esc(v)}">复制</button></div>`).join('')}
+        <div class="av-row"><div class="av-k">调用标注</div><div class="av-v callout">${esc(a.callout||'（未填）')}</div><button class="btn av-copy" data-copy="${esc(a.callout||'')}">复制</button></div>
+        <div class="av-tags">${(a.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="meta">无标签</span>'}</div>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn" onclick="closeModal()">关闭</button>
+      <button class="btn primary" id="av-edit">编辑</button>
+    </div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  root.querySelectorAll('.av-copy').forEach(b=>b.addEventListener('click',()=>copyText(b.dataset.copy)));
+  root.querySelectorAll('.av-thumbs img').forEach(im=>im.addEventListener('click',()=>{
+    document.getElementById('av-big').src=im.src;
+    root.querySelectorAll('.av-thumbs img').forEach(x=>x.classList.remove('on'));
+    im.classList.add('on');
+  }));
+  document.getElementById('av-edit').addEventListener('click',()=>{closeModal();openAssetModal(a);});
+}
 document.getElementById('asset-presets').addEventListener('click',openPresetManager);
-document.getElementById('asset-add').addEventListener('click',()=>openAssetModal(null));
+document.getElementById('asset-add').addEventListener('click',()=>openAssetModal(null, state.assetCollection||''));
 document.getElementById('asset-export').addEventListener('click',openExportBriefing);
 document.getElementById('asset-new-project').addEventListener('click',openNewProjectModal);
-document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';populateAssetParents();renderAssets();});
+document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';state.assetCollection='';populateAssetParents();renderAssets();});
 document.getElementById('asset-parent').addEventListener('change',e=>{state.assetParent=e.target.value;renderAssets();});
 document.getElementById('asset-search').addEventListener('input',renderAssets);
-document.getElementById('asset-cat-tabs').addEventListener('click',e=>{const t=e.target.closest('.cat-tab');if(!t)return;state.assetCat=t.dataset.cat;renderAssetCatTabs();populateAssetParents();renderAssets();});
+document.getElementById('asset-cat-tabs').addEventListener('click',e=>{const t=e.target.closest('.cat-tab');if(!t)return;state.assetCat=t.dataset.cat;state.assetCollection='';renderAssetCatTabs();populateAssetParents();renderAssets();});
 document.getElementById('asset-grid').addEventListener('click',async e=>{
-  const card=e.target.closest('.asset-card');if(!card)return;
+  const card=e.target.closest('.collection-card,.mood-card');if(!card)return;
   const id=card.dataset.aid;
   const btn=e.target.closest('button[data-act]');
   if(btn){
     const act=btn.dataset.act;
-    if(act==='view'){openAssetModal(await getOne('assets',id));}
-    else if(act==='copy'){const a=await getOne('assets',id);if(a&&a.callout)copyText(a.callout);else toast('该资产还没有调用标注');}
-    else if(act==='del'){if(confirm('确定删除这个资产？')){await delOne('assets',id);toast('已删除');renderAssets();populateAssetParents();}}
-    return;
+    if(act==='open'){ const a=await getOne('assets',id); if(a){state.assetCollection=a.name;renderAssets();} return; }
+    if(act==='view'){ openAssetView(id); return; }
+    if(act==='copy'){ const a=await getOne('assets',id); if(a&&a.callout)copyText(a.callout); else toast('该资产还没有调用标注'); return; }
+    if(act==='del'){ if(confirm('确定删除这个资产？')){ await delOne('assets',id); toast('已删除'); renderAssets(); populateAssetParents(); } return; }
   }
-  openAssetModal(await getOne('assets',id));
+  openAssetView(id);
 });
 
 /* ============ 启动 ============ */
