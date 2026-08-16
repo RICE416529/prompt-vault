@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17j';
+    var PAGE_VER='2026-08-17k';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -424,7 +424,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17j';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17k';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1294,15 +1294,8 @@ const ASSET_CATS = [
   {id:'palette', name:'色板', icon:'🎨', parent:'', hint:'7色块：类型 / HEX / 使用场景'},
 ];
 const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
-// 子资产「子类型」建议：按父集类型给出细分项
-const SUBTYPES = {
-  character:['三视图','全身照','头像','半身','配饰','服装','发型','参考图'],
-  costume:['常服','主服','战斗服','礼服','季节装','配饰'],
-  expression:['表情九宫格','表情十六宫格','动作十六宫格','微表情'],
-  scene:['全景','中景','近景','俯视','仰视','细节','概念图','平面布局'],
-  prop:['三视图','实拍参考','3D渲染','特写','使用示意'],
-  palette:['主色板','光影板','材质板']
-};
+// 子资产「子类型」建议（即「在集里建资产时可选的细分分类」）现由 assetPresets.subtypes 提供，
+// 按父集类型（category）分组，可在「⚙ 预选项」里逐类编辑、持久化。见 DEFAULT_ASSET_PRESETS.subtypes。
 // 集封面：显式封面 > 上传封面图 > 与子资产显示模式联动（色板集专属）
 function collectionCover(name, assets){
   const root=assets.find(a=>a.name===name && !a.parent); if(!root) return '';
@@ -1359,6 +1352,14 @@ const DEFAULT_ASSET_PRESETS = {
     scene:['作为本片视觉锚定：空间位置与光线方向前后一致','场景氛围定调'],
     prop:['保持道具形状、颜色、材质一致','虚拟技能/特效形态一致'],
     palette:['统一整条视频色彩方向','控制高饱和霓虹，保持低饱和质感']
+  },
+  subtypes: {
+    character:['表情动作','妆造','道具','三视图','全身照','头像','半身','配饰','服装','发型','参考图'],
+    costume:['常服','主服','战斗服','礼服','季节装','配饰'],
+    expression:['表情九宫格','表情十六宫格','动作十六宫格','微表情'],
+    scene:['道具','天气','时间','全景','中景','近景','俯视','仰视','细节','概念图','平面布局'],
+    prop:['三视图','实拍参考','3D渲染','特写','使用示意'],
+    palette:['主色板','光影板','材质板']
   }
 };
 let assetPresets = JSON.parse(JSON.stringify(DEFAULT_ASSET_PRESETS));
@@ -1370,7 +1371,8 @@ async function loadAssetPresets(){
       tools:(v.tools||[]).slice(),
       tags:(v.tags||[]).slice(),
       names:Object.assign({},DEFAULT_ASSET_PRESETS.names,v.names||{}),
-      purposes:Object.assign({},DEFAULT_ASSET_PRESETS.purposes,v.purposes||{})
+      purposes:Object.assign({},DEFAULT_ASSET_PRESETS.purposes,v.purposes||{}),
+      subtypes:Object.assign({},DEFAULT_ASSET_PRESETS.subtypes,v.subtypes||{})
     };
   }
 }
@@ -1669,7 +1671,7 @@ async function openAssetModal(existing, presetParent){
     const cat=getCat();
     fillDatalist('am-tool-list',assetPresets.tools);
     fillDatalist('am-name-list',assetPresets.names[cat]||[]);
-    fillDatalist('am-subtype-list',SUBTYPES[parentCategory]||[]);
+    fillDatalist('am-subtype-list',assetPresets.subtypes[parentCategory]||[]);
     if(document.getElementById('am-parent-list')) fillDatalist('am-parent-list',assetCharNames);
     renderTagSuggestions();
     renderPurposeSuggestions();
@@ -1836,7 +1838,7 @@ function openPresetManager(){
     <div class="mtab" style="overflow-y:auto;padding-right:6px">
       <div class="field"><label>生成工具 / 来源（每行一个）</label><textarea id="pm-tools">${flat(assetPresets.tools)}</textarea></div>
       <div class="field"><label>常用标签（每行一个）</label><textarea id="pm-tags">${flat(assetPresets.tags)}</textarea></div>
-      ${ASSET_CATS.map(c=>`<div class="field"><label>${c.icon} ${c.name} · 名称建议</label><textarea id="pm-name-${c.id}">${flat(assetPresets.names[c.id])}</textarea></div><div class="field"><label>${c.icon} ${c.name} · 用途说明建议</label><textarea id="pm-purp-${c.id}">${flat(assetPresets.purposes[c.id])}</textarea></div>`).join('')}
+      ${ASSET_CATS.map(c=>`<div class="field"><label>${c.icon} ${c.name} · 名称建议</label><textarea id="pm-name-${c.id}">${flat(assetPresets.names[c.id])}</textarea></div><div class="field"><label>${c.icon} ${c.name} · 子类型建议（在该集内新建资产时的分类选项，每行一个）</label><textarea id="pm-sub-${c.id}">${flat(assetPresets.subtypes[c.id])}</textarea></div><div class="field"><label>${c.icon} ${c.name} · 用途说明建议</label><textarea id="pm-purp-${c.id}">${flat(assetPresets.purposes[c.id])}</textarea></div>`).join('')}
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:10px">
       <button class="btn" onclick="closeModal()">取消</button>
@@ -1849,6 +1851,7 @@ function openPresetManager(){
     assetPresets.tags=unflat(document.getElementById('pm-tags').value);
     ASSET_CATS.forEach(c=>{
       assetPresets.names[c.id]=unflat(document.getElementById('pm-name-'+c.id).value);
+      assetPresets.subtypes[c.id]=unflat(document.getElementById('pm-sub-'+c.id).value);
       assetPresets.purposes[c.id]=unflat(document.getElementById('pm-purp-'+c.id).value);
     });
     await saveAssetPresets();
