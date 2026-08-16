@@ -20,6 +20,19 @@
 > Windows 用户也可直接双击 `serve.bat` 一键启动并打开页面。
 
 ## 分享给朋友
-本工具已部署到 GitHub Pages，朋友打开链接即可使用。
+本工具已部署到 GitHub Pages，朋友直接打开下面的链接即可使用：
+
+**https://rice416529.github.io/prompt-vault/**
+
 注意：每人数据存在各自浏览器里，互不可见；要共享同一份数据需另接后端（当前未做）。
 翻译功能走公共接口（Google gtx / MyMemory），需联网，无密钥、免费但有速率限制。
+
+## 更新线上版本
+代码在 `main` 分支，GitHub Pages 会从 `main` 根目录自动重建。改完 `index.html` 后：
+
+    git add -A
+    git commit -m "你的说明"
+    git push
+
+或在该文件夹下双击 `deploy.ps1`（会提示输入提交说明并自动推送）。
+注意：GitHub Pages 重建通常需要 30~60 秒，硬刷新（Ctrl+Shift+R）避开浏览器缓存即可看到新版。
