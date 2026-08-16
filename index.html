@@ -6,6 +6,22 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<script>
+// 自动更新：每次部署请同步修改 PAGE_VER（须与下方 APP_VER 一致）。
+// 原理：若当前网址未带 ?v=PAGE_VER，则重定向到带版本参数的同名地址；
+// 浏览器会把带不同参数的 URL 当作全新请求，从而绕过对 index.html 的强缓存，
+// 让你“直接输网址”也能拿到最新版，无需每次无痕/硬刷。
+(function(){
+  try{
+    var PAGE_VER='2026-08-17f';
+    var p=new URL(location.href);
+    if(p.searchParams.get('v')!==PAGE_VER){
+      p.searchParams.set('v',PAGE_VER);
+      location.replace(p.pathname+p.search);
+    }
+  }catch(e){}
+})();
+</script>
 <title>AI 创作库 · Vault Studio</title>
 <style>
   :root{
@@ -402,7 +418,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17e';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17f';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1477,7 +1493,8 @@ async function openAssetModal(existing, presetParent){
   let parentCategory = a.category;
   if(a.parent){ const pa=allAssets.find(x=>x.name===a.parent && !x.parent); if(pa) parentCategory=pa.category; }
   if(!isCollection) a.category=parentCategory; // 子资产继承父集类型
-  const children = isCollection ? allAssets.filter(x=>x.parent===a.name) : [];
+  // 封面备选图：仅「编辑已有集」时取该集自己的子资产图；新建集还没有子资产，应为空
+  const children = (isCollection && a.id) ? allAssets.filter(x=>(x.parent||'')===a.name) : [];
   const root=document.getElementById('modal-root');
   const paletteRowsHtml = (!isCollection && a.category==='palette') ? `<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>` : '';
   let body;
