@@ -7,18 +7,21 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <script>
-// 自动更新：每次部署请同步修改 PAGE_VER（须与下方 APP_VER 一致）。
-// 原理：若当前网址未带 ?v=PAGE_VER，则重定向到带版本参数的同名地址；
-// 浏览器会把带不同参数的 URL 当作全新请求，从而绕过对 index.html 的强缓存，
-// 让你“直接输网址”也能拿到最新版，无需每次无痕/硬刷。
+// 自动更新：每次部署须同步 PAGE_VER（下方 APP_VER）与仓库根目录的 version.txt。
+// 原理：加载后静默拉取 version.txt（带防缓存参数，每次都拿最新），若线上版本号与
+// 内置 PAGE_VER 不同，则强制重新加载当前页（一次性时间戳参数，绕过任何缓存拿到最新
+// index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17f';
-    var p=new URL(location.href);
-    if(p.searchParams.get('v')!==PAGE_VER){
-      p.searchParams.set('v',PAGE_VER);
-      location.replace(p.pathname+p.search);
+    var PAGE_VER='2026-08-17g';
+    if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
+    function check(){
+      fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
+        var v=(t||'').trim();
+        if(v && v!==PAGE_VER){ location.replace(location.pathname+'?_='+Date.now()); }
+      }).catch(function(){});
     }
+    setTimeout(check, 1000);
   }catch(e){}
 })();
 </script>
@@ -418,7 +421,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17f';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17g';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
