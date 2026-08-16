@@ -402,7 +402,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17d';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17e';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1403,7 +1403,6 @@ function collectionCardHtml(a,cnt,coverUrl){
       <div class="m-name"><b>${esc((a.name||'(未命名)'))}</b></div>
       <div class="m-sub">${esc((a.purpose||'').slice(0,80))||'<span style="color:#666">（未填用途说明）</span>'}</div>
       <div class="actions">
-        <button class="btn" data-act="open">进入集</button>
         <button class="btn" data-act="view" data-id="${a.id}">查看</button>
         <button class="btn danger" data-act="del" data-id="${a.id}">删除</button>
       </div>
@@ -1431,20 +1430,11 @@ async function renderAssets(){
     const root=assets.find(a=>a.name===state.assetCollection && !a.parent);
     crumb.hidden=false;
     document.getElementById('asset-add').textContent='＋ 新建资产';
-    crumb.innerHTML=`<button class="btn" id="crumb-back">← 全部集</button><span class="crumb-name">${esc(state.assetCollection)}</span><span class="meta">· 素材集（画板式）</span>`;
+    crumb.innerHTML=`<button class="btn" id="crumb-back">← 全部集</button><span class="crumb-name">${esc(state.assetCollection)}</span>`;
     let children=assets.filter(a=>(a.parent||'')===state.assetCollection);
     if(q) children=children.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
     children.sort((a,b)=>b.createdAt-a.createdAt);
-    let html=`<div class="set-head">
-      <div class="sh-thumb">${assetHeadImg(root, collectionCover(state.assetCollection, assets))}</div>
-      <div class="sh-info">
-        <h4>${esc((root&&root.name)||state.assetCollection)}</h4>
-        <div class="m-badges"><span class="badge">${assetCatName(root?root.category:'')}</span><span class="badge set">集</span></div>
-        <div class="m-sub" style="margin-top:6px">${esc((root&&root.purpose||'').slice(0,140))||'<span style="color:#666">（未填用途说明）</span>'}</div>
-        <div class="actions" style="margin-top:8px"><button class="btn" id="sh-view">查看集信息</button></div>
-      </div>
-    </div>`;
-    html+=`<div class="set-label">子资产（画板）· ${children.length} 个</div>`;
+    let html=`<div class="set-label">子资产（画板）· ${children.length} 个</div>`;
     if(!children.length){
       html+=`<div class="empty">这个集里还没有子资产。点「＋ 新建资产」，它会自动归入「${esc(state.assetCollection)}」。</div>`;
     } else {
@@ -1453,7 +1443,6 @@ async function renderAssets(){
     grid.className='';
     grid.innerHTML=html;
     document.getElementById('crumb-back').addEventListener('click',()=>{state.assetCollection='';renderAssetCatTabs();renderAssets();});
-    const shv=document.getElementById('sh-view'); if(shv&&root) shv.addEventListener('click',()=>openAssetView(root.id));
     return;
   }
 
@@ -1494,16 +1483,11 @@ async function openAssetModal(existing, presetParent){
   let body;
   if(isCollection){
     body = `
-      <div class="field"><label>集类型</label>
-        <select id="am-cat">${ASSET_CATS.map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
+      <div class="field"><label>集类型（只选大的分类，更细的类别进集后再划）</label>
+        <select id="am-cat">${ASSET_CATS.filter(c=>['character','scene','palette'].includes(c.id)).map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
         <div class="paste-hint" id="am-cat-hint"></div>
       </div>
       <div class="field"><label>集名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
-      <div class="field"><label>封面图片（可选：不上传则自动取集内第一张图；也可在下方从集内图片选）</label>
-        <div id="am-images" class="am-images"></div>
-        <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
-        <div class="paste-hint">在别处复制图片后，聚焦此窗口按 Ctrl+V 即可粘入；上传后会作为自定义封面。</div>
-      </div>
       <div class="field"><label>这个集是做什么的（用途说明）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
         <div class="sug" id="am-purp-sugs"></div>
         <div class="sug-hint">点上面的建议可快速填入，也可自己写。</div>
@@ -1549,7 +1533,7 @@ async function openAssetModal(existing, presetParent){
     </div>
   </div></div>`;
   const overlay=root.querySelector('.overlay');
-  overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  // 注意：资产弹窗不在点外部时关闭，必须点「取消」或「创建」才关
 
   function renderPaletteRows(){
     const wrap=document.getElementById('pal-rows'); if(!wrap) return;
@@ -1577,6 +1561,7 @@ async function openAssetModal(existing, presetParent){
   let images=a.images||[];
   const imgBox=document.getElementById('am-images');
   function renderImages(){
+    if(!imgBox) return; // 集模式无图片上传控件
     imgBox.innerHTML=images.map((im,i)=>{
       const u=im.blob?URL.createObjectURL(im.blob):(im.url||'');
       return `<div class="am-img" data-i="${i}" style="display:inline-block;position:relative;margin:4px;border:1px solid var(--border);border-radius:8px;overflow:hidden;vertical-align:top">
@@ -1591,9 +1576,11 @@ async function openAssetModal(existing, presetParent){
     });
   }
   function addImg(blob,url){ images.push(url?{blob:null,url,caption:''}:{blob,url:null,caption:''}); renderImages(); }
-  document.getElementById('am-file').addEventListener('change',e=>{[...e.target.files].forEach(f=>addImg(f)); if(isCollection)a.cover=null; e.target.value='';});
-  document.getElementById('am-url').addEventListener('change',e=>{const u=e.target.value.trim();if(u)addImg(null,u); if(isCollection)a.cover=null;});
-  overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){addImg(f);toast('已粘贴图片');}break;}}});
+  if(!isCollection){
+    const amf=document.getElementById('am-file'); if(amf) amf.addEventListener('change',e=>{[...e.target.files].forEach(f=>addImg(f)); e.target.value='';});
+    const amu=document.getElementById('am-url'); if(amu) amu.addEventListener('change',e=>{const u=e.target.value.trim();if(u)addImg(null,u);});
+    overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){addImg(f);toast('已粘贴图片');}break;}}});
+  }
   try{ renderImages(); }catch(e){console.error('images init',e);}
   try{ renderCoverPicker(); }catch(e){console.error('cover picker',e);}
 
@@ -1875,12 +1862,16 @@ document.getElementById('asset-grid').addEventListener('click',async e=>{
   const btn=e.target.closest('button[data-act]');
   if(btn){
     const act=btn.dataset.act;
-    if(act==='open'){ const a=await getOne('assets',id); if(a){state.assetCollection=a.name;renderAssets();} return; }
     if(act==='view'){ openAssetView(id); return; }
     if(act==='copy'){ const a=await getOne('assets',id); if(a&&a.callout)copyText(a.callout); else toast('该资产还没有调用标注'); return; }
     if(act==='del'){ if(confirm('确定删除这个资产？')){ await delOne('assets',id); toast('已删除'); renderAssets(); populateAssetParents(); } return; }
   }
-  openAssetView(id);
+  // 点卡片主体：集卡片直接进集，子资产卡片打开查看
+  if(card.classList.contains('collection-card')){
+    const a=await getOne('assets',id); if(a){state.assetCollection=a.name;renderAssets();}
+  } else {
+    openAssetView(id);
+  }
 });
 
 /* ============ 启动 ============ */
