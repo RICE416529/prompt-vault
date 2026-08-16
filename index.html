@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17i';
+    var PAGE_VER='2026-08-17j';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -424,7 +424,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17i';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17j';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1950,7 +1950,9 @@ document.getElementById('asset-grid').addEventListener('click',async e=>{
     const act=btn.dataset.act;
     if(act==='view'){ openAssetView(id); return; }
     if(act==='copy'){ const a=await getOne('assets',id); if(a&&a.callout)copyText(a.callout); else toast('该资产还没有调用标注'); return; }
-    if(act==='del'){ if(confirm('确定删除这个资产？')){ await delOne('assets',id); toast('已删除'); renderAssets(); populateAssetParents(); } return; }
+    if(act==='del'){ if(confirm('确定删除这个资产？')){ const a=await getOne('assets',id); if(a && !a.parent){ // 删除的是「集（根资产）」：级联删除其所有子资产，避免残留孤儿
+        const all=await getAll('assets'); for(const c of all.filter(x=>x.parent===a.name)) await delOne('assets',c.id); }
+      await delOne('assets',id); toast('已删除'); renderAssets(); populateAssetParents(); } return; }
   }
   // 点卡片主体：集卡片直接进集，子资产卡片打开查看
   if(card.classList.contains('collection-card')){
@@ -2005,11 +2007,25 @@ function showBlockedBanner(){
     catch(e){ showBlockedBanner(); }
   };
 }
+// 清理孤儿子资产：父集（根资产）已被删除、但子资产仍残留的情况。
+// 这类孤儿会导致「重名新建集」时自动认回旧图。每次启动自动清一次。
+async function cleanupOrphanAssets(){
+  try{
+    const all=await getAll('assets');
+    const rootNames=new Set(all.filter(a=>!a.parent).map(a=>a.name));
+    const orphans=all.filter(a=>a.parent && !rootNames.has(a.parent));
+    if(orphans.length){
+      for(const o of orphans) await delOne('assets',o.id);
+      console.log('[VaultStudio] 已清理 '+orphans.length+' 个孤儿子资产');
+    }
+  }catch(e){ console.warn('cleanupOrphanAssets failed',e); }
+}
 async function initApp(){
   await loadCategories();
   const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
   await seedIfEmpty();
   await seedAssetsIfEmpty();
+  await cleanupOrphanAssets(); // 修好历史上已残留的孤儿（如曾删过又重建的同名集）
   await loadAssetPresets();
   await populateProjects();
   renderAssetCatTabs();
