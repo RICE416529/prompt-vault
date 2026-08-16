@@ -402,7 +402,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17c';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17d';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1272,6 +1272,25 @@ const ASSET_CATS = [
   {id:'palette', name:'色板', icon:'🎨', parent:'', hint:'7色块：类型 / HEX / 使用场景'},
 ];
 const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
+// 子资产「子类型」建议：按父集类型给出细分项
+const SUBTYPES = {
+  character:['三视图','全身照','头像','半身','配饰','服装','发型','参考图'],
+  costume:['常服','主服','战斗服','礼服','季节装','配饰'],
+  expression:['表情九宫格','表情十六宫格','动作十六宫格','微表情'],
+  scene:['全景','中景','近景','俯视','仰视','细节','概念图','平面布局'],
+  prop:['三视图','实拍参考','3D渲染','特写','使用示意'],
+  palette:['主色板','光影板','材质板']
+};
+// 集封面：显式封面 > 上传封面图 > 集内第一张子资产图（自动）
+function collectionCover(name, assets){
+  const root=assets.find(a=>a.name===name && !a.parent); if(!root) return '';
+  const mku=im=>{ if(!im) return ''; const u=im.blob?URL.createObjectURL(im.blob):(im.url||''); if(u) assetMediaUrls.push(u); return u; };
+  if(root.cover) return mku(root.cover);
+  if(root.images&&root.images.length) return mku(root.images[0]);
+  const ch=assets.find(a=>a.parent===name && a.images && a.images.length);
+  if(ch) return mku(ch.images[0]);
+  return '';
+}
 
 /* 预选项：新建资产时的输入建议，可编辑/删除/添加，持久化在 meta.assetPresets */
 const DEFAULT_ASSET_PRESETS = {
@@ -1367,19 +1386,21 @@ function assetThumbHtml(a){
   }
   return `<div class="m-thumb"><div class="ph">无图</div></div>`;
 }
-/* 集头部大图（展示视图用） */
-function assetHeadImg(a){
-  if(a&&a.images&&a.images.length){const im=a.images[0];const u=im.blob?URL.createObjectURL(im.blob):im.url;if(u){assetMediaUrls.push(u);return `<img src="${u}">`;}}
-  return `<span class="ph">无图</span>`;
+/* 集头部大图（展示视图用）；coverUrl 优先（自动/显式封面） */
+function assetHeadImg(a, coverUrl){
+  let u=coverUrl||'';
+  if(!u && a && a.images && a.images.length){const im=a.images[0];u=im.blob?URL.createObjectURL(im.blob):(im.url||'');if(u)assetMediaUrls.push(u);}
+  return u?`<img src="${u}">`:`<span class="ph">无图</span>`;
 }
-function collectionCardHtml(a,cnt){
+function collectionCardHtml(a,cnt,coverUrl){
   const c=(cnt&&cnt[a.name])||0;
+  const thumb = coverUrl ? `<div class="m-thumb"><img src="${coverUrl}" alt=""></div>` : assetThumbHtml(a);
   const badges=`<span class="badge">${assetCatName(a.category)}</span><span class="badge set">集</span>${c?`<span class="badge sub">含 ${c} 个子资产</span>`:''}`;
   return `<div class="collection-card" data-aid="${a.id}">
-    ${assetThumbHtml(a)}
+    ${thumb}
     <div class="m-body">
       <div class="m-badges">${badges}</div>
-      <div class="m-name"><b>${esc(a.name||'(未命名)')}</b></div>
+      <div class="m-name"><b>${esc((a.name||'(未命名)'))}</b></div>
       <div class="m-sub">${esc((a.purpose||'').slice(0,80))||'<span style="color:#666">（未填用途说明）</span>'}</div>
       <div class="actions">
         <button class="btn" data-act="open">进入集</button>
@@ -1389,7 +1410,7 @@ function collectionCardHtml(a,cnt){
     </div></div>`;
 }
 function moodCardHtml(a){
-  const badges=`<span class="badge">${assetCatName(a.category)}</span>${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
+  const badges=`<span class="badge">${assetCatName(a.category)}</span>${a.subType?`<span class="badge sub">${esc(a.subType)}</span>`:''}${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
   return `<div class="mood-card" data-aid="${a.id}">
     ${assetThumbHtml(a)}
     <div class="m-body">
@@ -1415,7 +1436,7 @@ async function renderAssets(){
     if(q) children=children.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
     children.sort((a,b)=>b.createdAt-a.createdAt);
     let html=`<div class="set-head">
-      <div class="sh-thumb">${assetHeadImg(root)}</div>
+      <div class="sh-thumb">${assetHeadImg(root, collectionCover(state.assetCollection, assets))}</div>
       <div class="sh-info">
         <h4>${esc((root&&root.name)||state.assetCollection)}</h4>
         <div class="m-badges"><span class="badge">${assetCatName(root?root.category:'')}</span><span class="badge set">集</span></div>
@@ -1451,28 +1472,52 @@ async function renderAssets(){
     return;
   }
   grid.className='grid mood-grid';
-  grid.innerHTML=roots.map(a=>collectionCardHtml(a,childCount)).join('');
+  grid.innerHTML=roots.map(a=>collectionCardHtml(a,childCount, collectionCover(a.name, assets))).join('');
 }
-function openAssetModal(existing, presetParent){
+async function openAssetModal(existing, presetParent){
   const isEdit=!!existing;
-  const a = existing || {id:uid(),projectId:state.assetProject,category:state.assetCat==='all'?'character':state.assetCat,name:'',parent:'',images:[],purpose:'',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
+  const a = existing || {id:uid(),projectId:state.assetProject,category:state.assetCat==='all'?'character':state.assetCat,name:'',parent:'',subType:'',images:[],purpose:'',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
   if(presetParent && !existing) a.parent=presetParent; // 在某集内新建时自动归入该集
-  const creatingCollection = !isEdit && !a.parent; // 总览页「新建集」：根资产，无所属集
+  const isCollection = !a.parent; // 根资产=集（简化）；有父级=子资产（详细）
   a.detail=a.detail||{};
   if(a.category==='palette' && !a.detail.colors) a.detail.colors=defaultPaletteColors();
   if(a.category==='prop' && !a.detail.propType) a.detail.propType='real';
   if(a.category==='expression' && !a.detail.list) a.detail.list='';
+  // 取父集类型（子资产继承）与集内子资产（用于选封面）
+  const allAssets = await getAll('assets');
+  let parentCategory = a.category;
+  if(a.parent){ const pa=allAssets.find(x=>x.name===a.parent && !x.parent); if(pa) parentCategory=pa.category; }
+  if(!isCollection) a.category=parentCategory; // 子资产继承父集类型
+  const children = isCollection ? allAssets.filter(x=>x.parent===a.name) : [];
   const root=document.getElementById('modal-root');
-  const paletteRowsHtml = a.category==='palette' ? `<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>` : '';
-  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(840px,100%);max-height:92vh;display:flex;flex-direction:column">
-    <h3>${isEdit?'编辑资产':(creatingCollection?'新建集':'新建资产')} <small id="am-cat-label"></small></h3>
-    <div class="mtab" style="overflow-y:auto;padding-right:6px">
-      <div class="field"><label>类型</label>
-        <select id="am-cat" ${isEdit?'disabled':''}>${ASSET_CATS.map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
+  const paletteRowsHtml = (!isCollection && a.category==='palette') ? `<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>` : '';
+  let body;
+  if(isCollection){
+    body = `
+      <div class="field"><label>集类型</label>
+        <select id="am-cat">${ASSET_CATS.map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
         <div class="paste-hint" id="am-cat-hint"></div>
       </div>
-      <div class="field"><label>名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
-      <div class="field" id="am-parent-field" style="display:${creatingCollection?'none':''}"><label>所属集（选填：归入某个已建的人物 / 场景 / 道具，成为它的子资产）</label><input id="am-parent" list="am-parent-list" style="width:100%" value="${esc(a.parent)}" placeholder="如：林晚 / 旧公寓（留空则为独立「集」）"><datalist id="am-parent-list"></datalist></div>
+      <div class="field"><label>集名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
+      <div class="field"><label>封面图片（可选：不上传则自动取集内第一张图；也可在下方从集内图片选）</label>
+        <div id="am-images" class="am-images"></div>
+        <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
+        <div class="paste-hint">在别处复制图片后，聚焦此窗口按 Ctrl+V 即可粘入；上传后会作为自定义封面。</div>
+      </div>
+      <div class="field"><label>这个集是做什么的（用途说明）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
+        <div class="sug" id="am-purp-sugs"></div>
+        <div class="sug-hint">点上面的建议可快速填入，也可自己写。</div>
+      </div>
+      <div class="field"><label>集标签（逗号分隔，也可点下方建议）</label><input id="am-tags" style="width:100%" value="${esc((a.tags||[]).join(', '))}">
+        <div class="sug" id="am-tag-sugs"></div>
+      </div>
+      <div class="field"><label>集设定 / 备注（概括这个集合：世界观、人物背景、统一风格等）</label><textarea id="am-notes" placeholder="如：林晚，22岁，冷感职场女性；整体走写实+冷色调；与旧公寓场景联动">${esc(a.detail.notes||'')}</textarea></div>
+      <div class="field"><label>从集内图片选封面</label><div id="am-cover-pick" class="am-images"></div></div>
+    `;
+  } else {
+    body = `
+      <div class="field"><label>子类型（${assetCatName(parentCategory)} 下的细分，如三视图 / 配饰）</label><input id="am-subtype" list="am-subtype-list" style="width:100%" value="${esc(a.subType||'')}" placeholder="如：三视图 / 配饰 / 多角度"><datalist id="am-subtype-list"></datalist></div>
+      <div class="field"><label>资产名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：林晚·三视图 / 旧公寓·全景"><datalist id="am-name-list"></datalist></div>
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
         <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
@@ -1491,10 +1536,16 @@ function openAssetModal(existing, presetParent){
       <div class="field"><label>标签（逗号分隔，也可点下方建议）</label><input id="am-tags" style="width:100%" value="${esc((a.tags||[]).join(', '))}">
         <div class="sug" id="am-tag-sugs"></div>
       </div>
+    `;
+  }
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(840px,100%);max-height:92vh;display:flex;flex-direction:column">
+    <h3>${isEdit?'编辑'+(isCollection?'集':'资产'):(isCollection?'新建集':'新建资产')} <small id="am-cat-label">${isCollection?'':assetCatName(parentCategory)}</small></h3>
+    <div class="mtab" style="overflow-y:auto;padding-right:6px">
+      ${body}
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:10px">
       <button class="btn" onclick="closeModal()">取消</button>
-      <button class="btn primary" id="am-save">${isEdit?'保存修改':'创建资产'}</button>
+      <button class="btn primary" id="am-save">${isEdit?'保存修改':'创建'+(isCollection?'集':'资产')}</button>
     </div>
   </div></div>`;
   const overlay=root.querySelector('.overlay');
@@ -1540,13 +1591,14 @@ function openAssetModal(existing, presetParent){
     });
   }
   function addImg(blob,url){ images.push(url?{blob:null,url,caption:''}:{blob,url:null,caption:''}); renderImages(); }
-  document.getElementById('am-file').addEventListener('change',e=>{[...e.target.files].forEach(f=>addImg(f));e.target.value='';});
-  document.getElementById('am-url').addEventListener('change',e=>{const u=e.target.value.trim();if(u)addImg(null,u);});
+  document.getElementById('am-file').addEventListener('change',e=>{[...e.target.files].forEach(f=>addImg(f)); if(isCollection)a.cover=null; e.target.value='';});
+  document.getElementById('am-url').addEventListener('change',e=>{const u=e.target.value.trim();if(u)addImg(null,u); if(isCollection)a.cover=null;});
   overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){addImg(f);toast('已粘贴图片');}break;}}});
   try{ renderImages(); }catch(e){console.error('images init',e);}
+  try{ renderCoverPicker(); }catch(e){console.error('cover picker',e);}
 
   // 预选项：填充 datalist 与可点选建议
-  function getCat(){return document.getElementById('am-cat').value;}
+  function getCat(){ return isCollection ? (document.getElementById('am-cat')?document.getElementById('am-cat').value:a.category) : parentCategory; }
   function renderTagSuggestions(){
     const c=document.getElementById('am-tag-sugs'); if(!c)return;
     const cur=()=>document.getElementById('am-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
@@ -1572,17 +1624,40 @@ function openAssetModal(existing, presetParent){
     const cat=getCat();
     fillDatalist('am-tool-list',assetPresets.tools);
     fillDatalist('am-name-list',assetPresets.names[cat]||[]);
-    fillDatalist('am-parent-list',assetCharNames);
+    fillDatalist('am-subtype-list',SUBTYPES[parentCategory]||[]);
+    if(document.getElementById('am-parent-list')) fillDatalist('am-parent-list',assetCharNames);
     renderTagSuggestions();
     renderPurposeSuggestions();
   }
-  // 异步拉取已建人物名，用于「所属角色」下拉
+  // 异步拉取已建人物名（仅子资产模式可能用到）
   getAll('assets').then(list=>{ assetCharNames=[...new Set(list.filter(x=>!x.parent&&x.name).map(x=>x.name))]; if(document.getElementById('am-parent-list'))fillDatalist('am-parent-list',assetCharNames); }).catch(()=>{});
   try{ refreshSuggestions(); }catch(e){console.error('suggestions init',e);}
-
+  // 封面选择器：从集内子资产图片中挑选一张做封面
+  function renderCoverPicker(){
+    const box=document.getElementById('am-cover-pick'); if(!box) return;
+    if(!children.length){ box.innerHTML='<span class="meta">（建好集并加入子资产后，可在此选一张做封面）</span>'; return; }
+    const items=[];
+    children.forEach(ch=>{(ch.images||[]).forEach((im,ii)=>{
+      const u=im.blob?URL.createObjectURL(im.blob):im.url; if(u) assetMediaUrls.push(u);
+      const sel = a.cover===im;
+      items.push(`<div class="am-img ${sel?'on':''}" data-cid="${ch.id}" data-ii="${ii}" style="display:inline-block;position:relative;margin:4px;border:2px solid ${sel?'var(--accent)':'var(--border)'};border-radius:8px;overflow:hidden;vertical-align:top;cursor:pointer">
+        <img src="${u}" style="width:70px;height:70px;object-fit:cover;display:block">
+        <div style="font-size:10px;padding:1px 3px;background:var(--bg2);color:var(--text)">${esc(ch.name||'')}</div>
+      </div>`);
+    });});
+    let html=items.join('');
+    if(a.cover) html+='<button class="btn" id="am-cover-clr" style="margin:4px">清除所选封面（改回自动取第一张）</button>';
+    box.innerHTML=html;
+    box.querySelectorAll('.am-img').forEach(el=>el.addEventListener('click',()=>{
+      const ch=children.find(x=>x.id===el.dataset.cid); const im=ch.images[+el.dataset.ii];
+      a.cover = im.blob?{blob:im.blob,url:null,caption:im.caption||''}:{blob:null,url:im.url,caption:im.caption||''};
+      renderCoverPicker();
+    }));
+    const clr=document.getElementById('am-cover-clr'); if(clr) clr.addEventListener('click',()=>{a.cover=null;renderCoverPicker();});
+  }
   function renderDetail(){
-    const cat=document.getElementById('am-cat').value;
-    const box=document.getElementById('am-detail');
+    const cat=getCat();
+    const box=document.getElementById('am-detail'); if(!box) return;
     if(cat==='palette'){
       if(!a.detail.colors||!a.detail.colors.length) a.detail.colors=defaultPaletteColors();
       box.innerHTML='<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>';
@@ -1596,54 +1671,57 @@ function openAssetModal(existing, presetParent){
       box.innerHTML='<div class="field"><label>空间布局要点（可选，写入调用标注）</label><textarea id="am-layout" placeholder="门在左侧、窗在右侧、茶几居中…">'+esc(a.detail.layout||'')+'</textarea></div>';
     } else { box.innerHTML=''; }
     const gc=document.getElementById('am-gen-callout'); if(gc) gc.addEventListener('click',()=>{
-      const c=document.getElementById('am-cat').value;
-      document.getElementById('am-callout').value=tplCallout(c,{name:document.getElementById('am-name').value,parent:document.getElementById('am-parent')?document.getElementById('am-parent').value:'',detail:a.detail});
+      const c=getCat();
+      document.getElementById('am-callout').value=tplCallout(c,{name:document.getElementById('am-name').value,parent:a.parent||'',detail:a.detail});
     });
   }
   function onCatChange(){
-    const cat=document.getElementById('am-cat').value;
+    const cat=getCat();
     const meta=ASSET_CATS.find(c=>c.id===cat);
-    document.getElementById('am-cat-label').textContent=meta?meta.name:'';
-    document.getElementById('am-cat-hint').textContent=meta?meta.hint:'';
-    document.getElementById('am-parent-field').style.display = creatingCollection ? 'none' : '';
-    if(cat==='palette'){ if(!a.detail.colors||!a.detail.colors.length) a.detail.colors=defaultPaletteColors(); }
-    if(cat==='prop'){ a.detail.propType=a.detail.propType||'real'; }
-    if(cat==='expression'){ a.detail.list=a.detail.list||''; }
-    renderDetail();
+    const lbl=document.getElementById('am-cat-label'); if(lbl) lbl.textContent=meta?meta.name:'';
+    const hint=document.getElementById('am-cat-hint'); if(hint) hint.textContent=meta?meta.hint:'';
+    if(!isCollection) renderDetail();
     refreshSuggestions();
   }
-  document.getElementById('am-cat').addEventListener('change',onCatChange);
-  document.getElementById('am-gen-callout').addEventListener('click',()=>{
-    const cat=document.getElementById('am-cat').value;
-    document.getElementById('am-callout').value=tplCallout(cat,{name:document.getElementById('am-name').value,parent:document.getElementById('am-parent')?document.getElementById('am-parent').value:'',detail:a.detail});
+  const amCat=document.getElementById('am-cat'); if(amCat) amCat.addEventListener('change',onCatChange);
+  const gcBtn=document.getElementById('am-gen-callout'); if(gcBtn) gcBtn.addEventListener('click',()=>{
+    const c=getCat();
+    document.getElementById('am-callout').value=tplCallout(c,{name:document.getElementById('am-name').value,parent:a.parent||'',detail:a.detail});
   });
-  document.getElementById('am-cat-label').textContent=ASSET_CATS.find(c=>c.id===a.category).name;
-  document.getElementById('am-cat-hint').textContent=ASSET_CATS.find(c=>c.id===a.category).hint;
-  try{ renderDetail(); }catch(e){console.error('detail init',e);}
-  try{ if(!a.callout) document.getElementById('am-callout').value=tplCallout(a.category,a); }catch(e){console.error('callout init',e);}
+  const lbl0=document.getElementById('am-cat-label'); if(lbl0) lbl0.textContent=assetCatName(isCollection?a.category:parentCategory);
+  const hint0=document.getElementById('am-cat-hint'); if(hint0) hint0.textContent=(ASSET_CATS.find(c=>c.id===(isCollection?a.category:parentCategory))||{}).hint||'';
+  try{ if(!isCollection) renderDetail(); }catch(e){console.error('detail init',e);}
+  try{ if(!isCollection && !a.callout) document.getElementById('am-callout').value=tplCallout(parentCategory,a); }catch(e){console.error('callout init',e);}
 
   document.getElementById('am-save').addEventListener('click',async()=>{
     try{
-      const cat=document.getElementById('am-cat').value;
-      a.category=cat;
+      if(isCollection){
+        a.category=document.getElementById('am-cat').value;
+        a.parent=''; a.subType='';
+        a.tool=''; a.genPrompt=''; a.callout='';
+        a.detail=a.detail||{};
+        a.detail.notes=document.getElementById('am-notes')?document.getElementById('am-notes').value.trim():'';
+      } else {
+        a.category=parentCategory;
+        a.subType=document.getElementById('am-subtype')?document.getElementById('am-subtype').value.trim():'';
+        a.parent=a.parent; // 自动归属当前集
+        a.tool=document.getElementById('am-tool').value.trim();
+        a.genPrompt=document.getElementById('am-gen').value.trim();
+        a.callout=document.getElementById('am-callout').value.trim();
+        if(parentCategory==='expression'){a.detail.list=document.getElementById('am-expr-list')?document.getElementById('am-expr-list').value.trim():a.detail.list;}
+        if(parentCategory==='scene'){a.detail.layout=document.getElementById('am-layout')?document.getElementById('am-layout').value.trim():a.detail.layout;}
+        if(parentCategory==='prop'){a.detail.propType=document.getElementById('am-prop-type')?document.getElementById('am-prop-type').value:a.detail.propType;a.detail.placement=document.getElementById('am-placement')?document.getElementById('am-placement').value.trim():a.detail.placement;}
+      }
       a.name=document.getElementById('am-name').value.trim();
-      a.parent=document.getElementById('am-parent')?document.getElementById('am-parent').value.trim():'';
       a.purpose=document.getElementById('am-purpose').value.trim();
-      a.tool=document.getElementById('am-tool').value.trim();
-      a.genPrompt=document.getElementById('am-gen').value.trim();
-      a.callout=document.getElementById('am-callout').value.trim();
       a.tags=document.getElementById('am-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
-      if(cat==='expression'){a.detail.list=document.getElementById('am-expr-list')?document.getElementById('am-expr-list').value.trim():a.detail.list;}
-      if(cat==='scene'){a.detail.layout=document.getElementById('am-layout')?document.getElementById('am-layout').value.trim():a.detail.layout;}
-      if(cat==='prop'){a.detail.propType=document.getElementById('am-prop-type')?document.getElementById('am-prop-type').value:a.detail.propType;a.detail.placement=document.getElementById('am-placement')?document.getElementById('am-placement').value.trim():a.detail.placement;}
       a.images=images.map(im=>({blob:im.blob||null,url:im.url||null,caption:im.caption||''}));
       a.projectId=state.assetProject;
       await putOne('assets',a);
-      // 把本次新输入的也收进预选项，方便下次
-      if(a.tool && !assetPresets.tools.includes(a.tool)){assetPresets.tools.push(a.tool);}
+      if(!isCollection && a.tool && !assetPresets.tools.includes(a.tool)){assetPresets.tools.push(a.tool);}
       (a.tags||[]).forEach(t=>{if(t && !assetPresets.tags.includes(t))assetPresets.tags.push(t);});
       await saveAssetPresets();
-      closeModal();toast(isEdit?'已保存修改 ✓':'已创建资产 ✓');
+      closeModal();toast(isEdit?'已保存修改 ✓':'已创建'+(isCollection?'集 ✓':'资产 ✓'));
       renderAssets();populateAssetParents();
     }catch(err){ console.error('save asset failed:',err); toast('保存失败：'+(err&&err.message||err)); }
   });
@@ -1736,12 +1814,20 @@ function openPresetManager(){
 async function openAssetView(id){
   const a=await getOne('assets',id); if(!a)return;
   const root=document.getElementById('modal-root');
+  const isCol = !a.parent;
   const imgs=a.images||[];
   const uOf=im=>{const u=im.blob?URL.createObjectURL(im.blob):(im.url||'');if(u)assetMediaUrls.push(u);return u;};
   const firstU=imgs.length?uOf(imgs[0]):'';
-  const info=[
+  const coverUrl = isCol ? collectionCover(a.name, await getAll('assets')) : '';
+  const info = isCol ? [
+    ['名称', a.name||'(未命名)'],
+    ['集类型', assetCatName(a.category)],
+    ['用途说明', a.purpose||'（未填）'],
+    ['集设定 / 备注', (a.detail&&a.detail.notes)||'（未填）'],
+  ] : [
     ['名称', a.name||'(未命名)'],
     ['类型', assetCatName(a.category)],
+    ['子类型', a.subType||'—'],
     ['所属集', a.parent||'—'],
     ['用途说明', a.purpose||'（未填）'],
     ['生成工具', a.tool||'（未填）'],
@@ -1750,11 +1836,11 @@ async function openAssetView(id){
   root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(880px,100%);max-height:92vh;display:flex;flex-direction:column">
     <h3>${esc(a.name||'资产')} <small>${assetCatName(a.category)}</small></h3>
     <div class="mtab" style="overflow-y:auto;padding-right:6px">
-      ${imgs.length?`<div class="av-stage"><img id="av-big" src="${firstU}" alt=""></div>`:`<div class="av-stage" style="color:#666;align-items:center">（该资产没有图片）</div>`}
-      ${imgs.length>1?`<div class="av-thumbs">${imgs.map((im,i)=>`<img data-i="${i}" class="${i===0?'on':''}" src="${uOf(im)}">`).join('')}</div>`:''}
+      ${isCol ? (coverUrl?`<div class="av-stage"><img id="av-big" src="${coverUrl}" alt=""></div>`:`<div class="av-stage" style="color:#666;align-items:center">（该集还没有封面 / 图片）</div>`) : (imgs.length?`<div class="av-stage"><img id="av-big" src="${firstU}" alt=""></div>`:`<div class="av-stage" style="color:#666;align-items:center">（该资产没有图片）</div>`)}
+      ${isCol?'':(imgs.length>1?`<div class="av-thumbs">${imgs.map((im,i)=>`<img data-i="${i}" class="${i===0?'on':''}" src="${uOf(im)}">`).join('')}</div>`:'')}
       <div class="av-info">
         ${info.map(([k,v])=>`<div class="av-row"><div class="av-k">${k}</div><div class="av-v">${esc(v)}</div><button class="btn av-copy" data-copy="${esc(v)}">复制</button></div>`).join('')}
-        <div class="av-row"><div class="av-k">调用标注</div><div class="av-v callout">${esc(a.callout||'（未填）')}</div><button class="btn av-copy" data-copy="${esc(a.callout||'')}">复制</button></div>
+        ${isCol?'':`<div class="av-row"><div class="av-k">调用标注</div><div class="av-v callout">${esc(a.callout||'（未填）')}</div><button class="btn av-copy" data-copy="${esc(a.callout||'')}">复制</button></div>`}
         <div class="av-tags">${(a.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="meta">无标签</span>'}</div>
       </div>
     </div>
