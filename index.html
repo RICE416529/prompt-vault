@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17h';
+    var PAGE_VER='2026-08-17i';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -424,7 +424,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17h';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17i';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1303,15 +1303,41 @@ const SUBTYPES = {
   prop:['三视图','实拍参考','3D渲染','特写','使用示意'],
   palette:['主色板','光影板','材质板']
 };
-// 集封面：显式封面 > 上传封面图 > 集内第一张子资产图（自动）
+// 集封面：显式封面 > 上传封面图 > 与子资产显示模式联动（色板集专属）
 function collectionCover(name, assets){
   const root=assets.find(a=>a.name===name && !a.parent); if(!root) return '';
   const mku=im=>{ if(!im) return ''; const u=im.blob?URL.createObjectURL(im.blob):(im.url||''); if(u) assetMediaUrls.push(u); return u; };
   if(root.cover) return mku(root.cover);
   if(root.images&&root.images.length) return mku(root.images[0]);
+  // 色板集：与「内部显示」联动——若第一个子资产切到了「图片」模式，外面封面就用它的图片；
+  // 否则渲染集本身的色板条（与集内子资产默认的色板显示保持一致）。
+  if(root.category==='palette'){
+    const children=assets.filter(a=>a.parent===name).sort((a,b)=>b.createdAt-a.createdAt);
+    const first=children[0];
+    if(first && first.images && first.images.length && (first.thumbMode||'palette')==='image'){
+      return mku(first.images[0]);
+    }
+    if(root.detail && root.detail.colors && root.detail.colors.length){
+      return paletteSvgUrl(root.detail.colors);
+    }
+  }
   const ch=assets.find(a=>a.parent===name && a.images && a.images.length);
   if(ch) return mku(ch.images[0]);
   return '';
+}
+/* 色板条 → SVG data URL（用作 img src，外部封面用） */
+function paletteSvgUrl(colors){
+  if(!colors||!colors.length) return '';
+  const w=420, h=240, gap=2;
+  const n=colors.length;
+  const totalGap=gap*(n-1);
+  const rectW=(w-totalGap)/n;
+  const rects=colors.map((c,i)=>{
+    const x=i*(rectW+gap);
+    return `<rect x="${x.toFixed(1)}" y="0" width="${rectW.toFixed(1)}" height="${h}" fill="${esc(c.hex)}"/>`;
+  }).join('');
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice">${rects}</svg>`;
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent(svg);
 }
 
 /* 预选项：新建资产时的输入建议，可编辑/删除/添加，持久化在 meta.assetPresets */
