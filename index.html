@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提示词收藏库 · Prompt Vault</title>
+<style>
+  :root{
+    --bg:#0d0d0f; --bg2:#141417; --panel:#1a1a1f; --panel2:#202027;
+    --border:#2a2a32; --border-acc:#ff4d6d; --accent:#ff5c8a; --accent2:#e63950;
+    --text:#e8e8ea; --muted:#9a9aa2; --green:#3ddc84; --chip:#26262e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;font-size:14px}
+  header{position:sticky;top:0;z-index:20;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+  .nav{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:10px 18px}
+  .brand{font-weight:700;font-size:16px;margin-right:18px;letter-spacing:.5px}
+  .brand b{color:var(--accent)}
+  .brand small{color:var(--muted);font-weight:400;font-size:11px;margin-left:6px}
+  .tab{background:transparent;border:1px solid transparent;color:var(--muted);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px}
+  .tab:hover{color:var(--text);background:var(--panel)}
+  .tab.active{color:#fff;border-color:var(--border-acc);background:linear-gradient(180deg,#2a1620,#1a1a1f);box-shadow:0 0 0 1px rgba(255,92,138,.25)}
+  main{max-width:1180px;margin:0 auto;padding:20px 18px 80px}
+  section[hidden]{display:none}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+  .toolbar .spacer{flex:1}
+  button.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px}
+  button.btn:hover{border-color:var(--accent)}
+  button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-weight:600}
+  button.primary:hover{filter:brightness(1.08)}
+  input,textarea,select{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+  input::placeholder,textarea::placeholder{color:#666}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .card.flash{animation:flash 1.4s ease}
+  @keyframes flash{0%,100%{box-shadow:0 0 0 0 rgba(255,92,138,0)}30%{box-shadow:0 0 0 2px var(--accent)}}
+  .thumb{height:150px;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid var(--border)}
+  .thumb img,.thumb video{max-width:100%;max-height:100%;object-fit:contain}
+  .thumb .ph{color:var(--muted);font-size:12px}
+  .card .body{padding:12px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .prompt-snippet{font-size:12px;color:#cfcfd6;line-height:1.5;max-height:72px;overflow:hidden;white-space:pre-wrap}
+  .meta{font-size:11px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+  .meta a{color:var(--accent);text-decoration:none}
+  .meta a:hover{text-decoration:underline}
+  .tags{display:flex;flex-wrap:wrap;gap:5px}
+  .tag{background:var(--chip);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:2px 8px;border-radius:20px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+  .actions button{flex:1;padding:6px 8px;font-size:12px}
+  .badge{display:inline-block;background:#2a1620;border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:6px}
+  .badge.sub{border-color:var(--border);color:var(--muted);background:var(--chip);margin-left:4px}
+  .block-card .body{position:relative}
+  .src-link{font-size:11px;color:var(--accent);cursor:pointer}
+  .src-link:hover{text-decoration:underline}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:30px 16px;overflow:auto}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:min(720px,100%);padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal h3{margin:0 0 14px;font-size:16px}
+  .modal h3 small{color:var(--muted);font-weight:400;margin-left:8px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field textarea{width:100%;min-height:90px;resize:vertical}
+  .paste-hint{font-size:11px;color:var(--accent);margin-top:4px}
+  .decomp-row{display:grid;grid-template-columns:1fr 130px 110px 120px 30px;gap:8px;margin-bottom:10px;align-items:start}
+  .decomp-cell{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .dec-tr{font-size:12px;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;line-height:1.5;min-height:30px;word-break:break-word;white-space:pre-wrap}
+  .dec-tr.loading{color:#777;font-style:italic;background:transparent;border-style:dashed}
+  .dec-tr.empty{color:#666;font-style:italic;background:transparent;border-style:dashed}
+  .tr-preview{margin-top:6px;font-size:12px;color:var(--text);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;line-height:1.5;min-height:34px;word-break:break-word;white-space:pre-wrap}
+  .tr-preview.loading{color:#777;font-style:italic}
+  .tr-preview .lbl{display:block;color:var(--accent);font-size:11px;margin-bottom:4px;font-weight:600}
+  .decomp-row input,.decomp-row select{padding:6px 8px;font-size:12px}
+  /* 分类/标签管理弹窗 */
+  .mtab{overflow-y:auto;padding-right:4px}
+  .mtab::-webkit-scrollbar{width:6px}
+  .mtab::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .cat-edit-row{display:flex;align-items:flex-start;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
+  .cat-edit-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+  .cat-name{font-size:13px;font-weight:600;padding:6px 8px;width:100%}
+  .cat-subs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .sub-chip{background:#2a2230;border:1px solid #4a2a3a;color:var(--text);font-size:12px;padding:3px 8px;border-radius:14px;display:inline-flex;align-items:center;gap:6px}
+  .sub-chip .sub-x{cursor:pointer;color:var(--accent);font-weight:700}
+  .sub-chip .sub-x:hover{color:var(--accent2)}
+  .sub-add{font-size:12px;padding:4px 8px;width:110px}
+  .cat-edit-ops{display:flex;flex-direction:column;gap:4px}
+  .btn.mini{padding:3px 8px;font-size:12px;line-height:1.2}
+  .tag-edit-row{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:6px}
+  .tag-edit-row .tag-name{flex:1;font-size:13px;padding:5px 8px}
+  .composer{display:grid;grid-template-columns:1fr;gap:16px}
+  .draft-chips{display:flex;flex-wrap:wrap;gap:6px;min-height:40px;border:1px dashed var(--border);border-radius:10px;padding:8px;align-items:flex-start;align-content:flex-start;max-height:200px;overflow-y:auto}
+  .draft-chips::-webkit-scrollbar{width:6px}
+  .draft-chips::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .chip-x{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:1px;background:var(--chip);border:1px solid var(--border);border-radius:7px;padding:3px 20px 4px 8px;font-size:11px;line-height:1.3;max-width:100%;transition:border-color .12s,background .12s}
+  .chip-x:hover{border-color:var(--accent);background:#2e2e38}
+  .chip-x .chip-cat{color:var(--accent);font-size:9px;letter-spacing:.4px;font-weight:600}
+  .chip-x .chip-en{color:var(--text);font-size:11px;line-height:1.35;word-break:break-word;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .chip-x .chip-zh{color:var(--muted);font-size:9.5px;line-height:1.25;word-break:break-word;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .chip-x b{position:absolute;top:2px;right:6px;color:var(--accent);cursor:pointer;font-weight:700;font-size:13px;line-height:1;padding:0 2px}
+  .chip-x b:hover{color:var(--accent2)}
+  .assembled{width:100%;min-height:160px;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.6}
+  /* 悬浮高亮层：叠在 textarea 之上（pointer-events:none），hover 选中区块时显示对应片段 */
+  .hl-wrap{position:relative;background:var(--bg2);border:1px solid #3a2030;border-radius:8px;overflow:hidden}
+  .hl-wrap:focus-within{border-color:var(--accent)}
+  .hl-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;padding:8px 10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:transparent;z-index:2}
+  .hl-layer mark{background:rgba(255,92,138,.30);color:transparent;border-radius:3px;box-shadow:0 0 0 1px rgba(255,92,138,.55)}
+  .empty{color:var(--muted);text-align:center;padding:40px;border:1px dashed var(--border);border-radius:12px}
+  .stat{display:flex;gap:24px;margin-bottom:18px}
+  .stat .k{font-size:22px;font-weight:700;color:var(--accent)}
+  .stat .l{font-size:12px;color:var(--muted)}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;border:1px solid var(--accent);color:#fff;padding:10px 18px;border-radius:8px;z-index:99;opacity:0;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .filter select,.filter input{font-size:12px}
+  .danger{color:var(--accent2)}
+  .blk-group{margin-bottom:26px}
+  .blk-group h4{font-size:13px;color:var(--accent);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .blk-group h4 .cnt{color:var(--muted);font-weight:400;font-size:11px}
+  .blk-group .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+  .tr-line{color:#ffb3c6;border-left:2px solid var(--accent);padding-left:8px;margin-top:6px;font-size:12px;line-height:1.5;white-space:pre-wrap}
+  .gal-card .thumb video,.gal-card .thumb img{object-fit:cover;width:100%;height:100%}
+  /* 区块库：横向滚动 + 可拖拽列 */
+  .hscroll{display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:4px 2px 14px;align-items:stretch;scrollbar-width:thin}
+  .hscroll::-webkit-scrollbar{height:10px}
+  .hscroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
+  .hscroll::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+  .blk-col{flex:0 0 280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;flex-direction:column;max-height:72vh;cursor:grab;transition:border-color .15s,transform .15s}
+  .blk-col:hover{border-color:var(--accent)}
+  .blk-col.dragging{opacity:.4;cursor:grabbing}
+  .blk-col.drag-over{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .blk-col-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);font-size:13px;color:var(--accent)}
+  .blk-col-head .cnt{color:var(--muted);font-weight:400;font-size:11px;margin-left:auto;background:var(--chip);border:1px solid var(--border);border-radius:20px;padding:1px 8px}
+  .blk-col-head .drag-hint{color:var(--muted);font-size:14px;cursor:grab;user-select:none;letter-spacing:-1px;line-height:1}
+  .blk-col-head .drag-hint:hover{color:var(--accent)}
+  .col-body{overflow-y:auto;display:flex;flex-direction:column;gap:12px;flex:1;padding-right:4px}
+  .col-body::-webkit-scrollbar{width:6px}
+  .col-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  /* 拼装台：合并区块库的两栏布局 */
+  .composer-layout{display:grid;grid-template-columns:minmax(340px,42%) 1fr;gap:18px;align-items:start}
+  .composer-pane{display:flex;flex-direction:column;gap:14px;position:sticky;top:80px;max-height:calc(100vh - 100px);overflow-y:auto;padding-right:6px}
+  .composer-pane::-webkit-scrollbar{width:6px}
+  .composer-pane::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .blocks-pane{display:flex;flex-direction:column;gap:10px;min-width:0}
+  /* 拼装台右上：可折叠的翻译小卡（精简版） */
+  .tr-mini{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--panel)}
+  .tr-mini-head{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border)}
+  .tr-mini-head .cat-tab{padding:4px 10px}
+  .tr-mini-head select{margin-left:auto;font-size:11px;padding:3px 6px}
+  .tr-mini-body{padding:8px;display:flex;flex-direction:column;gap:6px}
+  .tr-mini-body textarea{min-height:32px;font-size:12px;resize:vertical;line-height:1.5}
+  .tr-mini-body .row{margin:0}
+  .blocks-pane-head{display:flex;align-items:center;gap:8px}
+  .blocks-pane-head input{flex:1}
+  .cat-tabs{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .cat-tab{background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px}
+  .cat-tab:hover{color:var(--text);border-color:var(--accent)}
+  .cat-tab.active{color:#fff;border-color:var(--border-acc);background:linear-gradient(180deg,#2a1620,#1a1a1f)}
+  .cat-tab .cnt{color:var(--muted);margin-left:4px;font-size:11px}
+  .cat-tab.active .cnt{color:#ffb3c6}
+.blocks-list{display:flex;flex-direction:column;gap:7px;align-items:flex-start;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 240px);padding-right:6px;padding-bottom:14px;width:100%}
+.blocks-list::-webkit-scrollbar{width:6px}
+.blocks-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* 紧凑区块卡片（关键：flex-shrink:0 让卡片不被 flex 等比压缩） */
+.blk-c{padding:9px 12px;gap:6px;cursor:pointer;transition:border-color .15s,transform .1s;align-self:flex-start;width:100%;flex:0 0 auto}
+.blk-c .body{flex:0 0 auto;padding:0;display:flex;flex-direction:column;gap:6px}
+.blk-c.combo-c{border-color:#3a2030;background:linear-gradient(180deg,#1f1822 0%,#1a1a1f 100%);box-shadow:inset 3px 0 0 0 var(--accent)}
+.blk-c.combo-c:hover{border-color:var(--accent)}
+  .blk-c:hover{border-color:var(--accent)}
+  .blk-c .blk-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px}
+  .blk-c .blk-content{font-size:13px;line-height:1.55;white-space:pre-wrap;color:var(--text);word-break:break-word}
+  .blk-c .tr-line{margin-top:5px;font-size:12px}
+  .blk-c .blk-foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px;flex-wrap:wrap}
+  .blk-c .blk-foot .meta{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .blk-c .blk-foot .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:0}
+  .blk-c .blk-foot .tag{font-size:10px;padding:1px 6px}
+  .blk-c .blk-foot .actions{display:flex;gap:4px;margin:0;flex-shrink:0}
+  .blk-c .blk-foot .actions .btn{padding:3px 9px;font-size:11px}
+  .blk-c.added{animation:flash 1s ease}
+  /* 收藏库缩略图可点击放大 */
+  .thumb{cursor:zoom-in}
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <div class="brand">提示词<b>收藏库</b><small>Prompt Vault</small></div>
+    <button class="tab active" data-view="captures">📥 收藏库</button>
+    <button class="tab" data-view="composer">🛠 拼装台</button>
+    <button class="tab" data-view="gallery">🖼 图库</button>
+    <button class="tab" data-view="data">💾 数据</button>
+  </div>
+</header>
+<main>
+  <!-- 收藏库 -->
+  <section id="view-captures">
+    <div class="toolbar">
+      <button class="btn primary" id="add-capture">＋ 新增收藏</button>
+      <input id="cap-search" placeholder="搜索提示词 / 标签 / 来源…" style="min-width:220px">
+      <select id="cap-type"><option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="none">仅文本</option></select>
+      <div class="spacer"></div>
+      <span class="meta" id="cap-count"></span>
+    </div>
+    <div class="grid" id="capture-grid"></div>
+  </section>
+
+  <!-- 拼装台（合并区块库） -->
+  <section id="view-composer" hidden>
+    <div class="toolbar">
+      <button class="btn" id="composer-clear">清空</button>
+      <button class="btn" id="composer-copy-pos">复制正向</button>
+      <button class="btn" id="composer-copy-neg">复制负面</button>
+      <button class="btn primary" id="composer-save-combo">💾 保存组合</button>
+      <div class="spacer"></div>
+      <span class="meta" id="composer-count"></span>
+    </div>
+    <div class="composer-layout">
+      <div class="composer-pane">
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">已选区块（点 × 移除，点右侧区块一键加入）</label>
+          <div class="draft-chips" id="draft-chips"></div>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--accent);display:block;margin-bottom:6px">✅ 正向提示词（按分类智能排序）</label>
+          <div class="hl-wrap" id="hl-wrap-pos">
+            <textarea class="assembled" id="assembled" style="border:0;border-radius:0;background:transparent"></textarea>
+            <div class="hl-layer" id="hl-pos" style="display:none"><div class="hl-inner"></div></div>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--accent2);display:block;margin-bottom:6px">🚫 负面提示词（单独成段）</label>
+          <div class="hl-wrap" id="hl-wrap-neg">
+            <textarea class="assembled" id="assembled-neg" style="border:0;border-radius:0;background:transparent;min-height:90px"></textarea>
+            <div class="hl-layer" id="hl-neg" style="display:none"><div class="hl-inner"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="blocks-pane">
+        <div class="tr-mini" id="tr-mini">
+          <div class="tr-mini-head">
+            <button class="cat-tab active" id="tr-mini-toggle">🌐 翻译台</button>
+            <select id="tr-mini-dir">
+              <option value="zh|en">中 → 英</option>
+              <option value="en|zh">英 → 中</option>
+            </select>
+          </div>
+          <div class="tr-mini-body" id="tr-mini-body">
+            <textarea id="tr-mini-src" placeholder="输入要翻译的文字，随时中译英 / 英译中…"></textarea>
+            <div class="row" style="gap:6px;margin:0">
+              <button class="btn primary" id="tr-mini-go">翻译</button>
+              <button class="btn" id="tr-mini-copy">复制译文</button>
+            </div>
+            <textarea id="tr-mini-dst" readonly placeholder="译文…"></textarea>
+          </div>
+        </div>
+        <div class="blocks-pane-head">
+          <input id="blk-q" placeholder="搜索区块内容 / 标签…" style="min-width:160px">
+          <span class="meta" id="blk-count"></span>
+          <button class="btn" id="cat-manage" title="添加 / 删除 / 重命名分类与标签">⚙ 分类/标签</button>
+        </div>
+        <div class="cat-tabs" id="cat-tabs"></div>
+        <div class="blocks-list" id="blocks-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 数据 -->
+  <section id="view-data" hidden>
+    <h3 style="margin-top:0">数据备份与恢复</h3>
+    <div class="stat" id="data-stat"></div>
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn primary" id="export-btn">⬇ 导出 JSON</button>
+      <button class="btn" id="import-btn">⬆ 导入 JSON</button>
+      <input type="file" id="import-file" accept="application/json" hidden>
+    </div>
+    <div class="row">
+      <button class="btn danger" id="clear-btn">🗑 清空全部数据</button>
+    </div>
+    <p class="meta">所有数据（含图片/视频）仅保存在你本地浏览器的 IndexedDB 中，不上传任何服务器。建议定期导出备份。</p>
+  </section>
+
+  <!-- 图库 -->
+  <section id="view-gallery" hidden>
+    <div class="toolbar">
+      <button class="btn primary" id="add-image">＋ 添加图片</button>
+      <input id="gal-search" placeholder="搜索标签 / 来源…" style="min-width:200px">
+      <div class="spacer"></div>
+      <span class="meta" id="gal-count"></span>
+    </div>
+    <div class="grid" id="gallery-grid"></div>
+  </section>
+</main>
+<div id="modal-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ 分类体系（可编辑，持久化在 meta.categories） ============ */
+const DEFAULT_CATEGORIES = [
+  {id:'booster', name:'起手式', subs:['通用增强','写实增强','动漫增强','画质分辨率']},
+  {id:'style', name:'风格', subs:['艺术风格','媒介介质','参考作者','色调']},
+  {id:'character', name:'人设', subs:['外貌基础','发型','面部妆容','服装','气质姿态','身份背景']},
+  {id:'scene', name:'场景', subs:['地点','时间','天气','氛围','背景细节']},
+  {id:'subject', name:'内容主体', subs:['主体','动作','物件','互动']},
+  {id:'composition', name:'构图与镜头', subs:['景别','角度','镜头焦段','光线','构图']},
+  {id:'positive', name:'正面提示词', subs:['主体描述','整体氛围','通用']},
+  {id:'negative', name:'负面提示词', subs:['通用负面','画质负面','内容负面']},
+  {id:'general', name:'综合', subs:['其他','待分类']},
+  {id:'video', name:'视频动态', subs:['运动描述','运镜','时长转场','视频负面','电影感']},
+  {id:'combo', name:'组合', subs:[]},
+];
+let CATEGORIES = DEFAULT_CATEGORIES;
+const catName = id => (CATEGORIES.find(c=>c.id===id)||{}).name || id;
+const catSubs = id => (CATEGORIES.find(c=>c.id===id)||{}).subs || [];
+// 拼装智能排序（新增分类追加到末尾，删除分类时同步移除）
+const SORT_ORDER = ['booster','style','character','scene','subject','composition','positive','negative','general','video'];
+async function loadCategories(){
+  const d=await getOne('meta','categories');
+  if(d && Array.isArray(d.value) && d.value.length){ CATEGORIES=d.value.map(c=>({id:c.id,name:c.name,subs:[...(c.subs||[])]})); }
+  else { CATEGORIES=JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)); await saveCategories(); }
+}
+async function saveCategories(){ await putOne('meta',{id:'categories',value:CATEGORIES}); }
+function syncSortOrder(){
+  const ids=new Set(CATEGORIES.map(c=>c.id));
+  CATEGORIES.forEach(c=>{ if(!SORT_ORDER.includes(c.id)) SORT_ORDER.push(c.id); });
+  for(let i=SORT_ORDER.length-1;i>=0;i--){ if(!ids.has(SORT_ORDER[i])) SORT_ORDER.splice(i,1); }
+}
+
+/* ============ 数据库 ============ */
+const DB_NAME='promptvault', DB_VER=1;
+let db;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);
+  r.onupgradeneeded=e=>{const d=e.target.result;
+    ['captures','blocks','meta'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'});});};
+  r.onsuccess=e=>{db=e.target.result;res();};r.onerror=e=>rej(e.target.error);});}
+function st(name,mode){return db.transaction(name,mode).objectStore(name);}
+function getAll(name){return new Promise((res,rej)=>{const r=st(name,'readonly').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
+function getOne(name,key){return new Promise((res,rej)=>{const r=st(name,'readonly').get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function putOne(name,v){return new Promise((res,rej)=>{const r=st(name,'readwrite').put(v);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});}
+function delOne(name,key){return new Promise((res,rej)=>{const r=st(name,'readwrite').delete(key);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});}
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+
+/* ============ 状态 ============ */
+const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'' };
+let mediaUrls = [];
+let composerMap = {};
+function revokeMedia(){ mediaUrls.forEach(u=>URL.revokeObjectURL(u)); mediaUrls=[]; }
+
+/* ============ 工具 ============ */
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1600);}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// 提取英文：content / translation 谁是不含中文的就选谁（不预设哪个是英文）
+function pickEN(b){
+  const c=(b.content||'').trim(), t=(b.translation||'').trim();
+  const cEN = c && !/[一-鿿]/.test(c);
+  const tEN = t && !/[一-鿿]/.test(t);
+  if(cEN) return c;
+  if(tEN) return t;
+  return c || t; // 实在没有英文，退而求其次用原文
+}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('已复制 ✓');}catch(e){toast('复制失败，请手动选择');}}
+
+/* ============ 渲染：收藏库 ============ */
+async function renderCaptures(){
+  revokeMedia();
+  const grid=document.getElementById('capture-grid');
+  let caps=await getAll('captures');
+  const q=(document.getElementById('cap-search').value||'').toLowerCase();
+  const tp=document.getElementById('cap-type').value;
+  caps=caps.filter(c=>{
+    if(c.galleryOnly) return false;
+    if(tp && (c.media?c.media.type:'none')!==tp) return false;
+    if(q){const hay=((c.rawPrompt||'')+' '+(c.tags||[]).join(' ')+' '+(c.sourceUrl||'')).toLowerCase();if(!hay.includes(q))return false;}
+    return true;
+  });
+  caps.sort((a,b)=>b.createdAt-a.createdAt);
+  document.getElementById('cap-count').textContent=`共 ${caps.length} 条`;
+  if(!caps.length){grid.innerHTML='<div class="empty">还没有收藏。点「＋ 新增收藏」粘贴图片/视频和提示词吧。</div>';return;}
+  grid.innerHTML = caps.map(c=>{
+    let media='<div class="ph">无媒体</div>';
+    if(c.media){const u=URL.createObjectURL(c.media.blob);mediaUrls.push(u);
+      media = c.media.type==='video' ? `<video src="${u}" muted loop controls></video>` : `<img src="${u}" alt="">`;}
+    const src=c.sourceUrl?`<a href="${esc(c.sourceUrl)}" target="_blank" rel="noopener">来源 ↗</a>`:'';
+    const tags=(c.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+    const snip=esc((c.rawPrompt||'').slice(0,300));
+    const tr=c.translation?`<div class="tr-line">${esc(c.translation)}</div>`:'';
+    return `<div class="card" data-cid="${c.id}">
+      <div class="thumb">${media}</div>
+      <div class="body">
+        <div class="prompt-snippet">${snip||'<span style="color:#666">（无提示词文本）</span>'}</div>
+        ${tr}
+        <div class="meta"><span>${src}</span><span>🧩 ${c.blockCount||0} 区块</span><span>${new Date(c.createdAt).toLocaleString('zh-CN')}</span></div>
+        <div class="tags">${tags}</div>
+        <div class="actions">
+          <button class="btn" data-act="decomp" data-id="${c.id}">✂ 拆解</button>
+          <button class="btn" data-act="copy" data-id="${c.id}">复制</button>
+          <button class="btn danger" data-act="del" data-id="${c.id}">删除</button>
+        </div>
+      </div></div>`;
+  }).join('');
+  // 高亮跳转
+  if(state.highlightId){
+    const el=grid.querySelector(`[data-cid="${state.highlightId}"]`);
+    if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');}
+    state.highlightId=null;
+  }
+}
+
+/* ============ 渲染：拼装台（右栏区块列表） ============ */
+async function renderBlocksPane(){
+  const tabs=document.getElementById('cat-tabs');
+  const list=document.getElementById('blocks-list');
+  if(!tabs||!list) return;
+  const blocks=await getAll('blocks');
+  const counts={all:blocks.length};
+  CATEGORIES.forEach(c=>{ counts[c.id]=blocks.filter(b=>b.category===c.id).length; });
+  // 分类标签
+  const tabHtml=`<button class="cat-tab ${state.activeCat==='all'?'active':''}" data-cat="all">全部 <span class="cnt">${counts.all}</span></button>`+
+    CATEGORIES.map(c=>`<button class="cat-tab ${state.activeCat===c.id?'active':''}" data-cat="${c.id}">${esc(c.name)} <span class="cnt">${counts[c.id]}</span></button>`).join('');
+  tabs.innerHTML=tabHtml;
+  // 过滤
+  let filtered=blocks;
+  if(state.activeCat&&state.activeCat!=='all') filtered=filtered.filter(b=>b.category===state.activeCat);
+  const q=(state.blkSearch||'').toLowerCase();
+  if(q) filtered=filtered.filter(b=>(b.content+' '+(b.translation||'')+' '+((b.tags||[]).join(' '))).toLowerCase().includes(q));
+  filtered.sort((a,b)=>(b.usageCount||0)-(a.usageCount||0)||(b.createdAt||0)-(a.createdAt||0));
+  document.getElementById('blk-count').textContent=`${filtered.length} 个区块`;
+  if(!filtered.length){list.innerHTML='<div class="empty" style="padding:30px 10px">这个分类下还没有区块。试着换个分类，或先去收藏库拆解。</div>';return;}
+  list.innerHTML=filtered.map(b=>{
+    const isCombo=!!b.isCombo;
+    const tags=(b.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+    if(isCombo){
+      const preview=esc((b.content||'').slice(0,160));
+      const more=(b.content||'').length>160?'…':'';
+      const negCount=b.negative?(b.negative.split(/[,，.。\s]+/).filter(Boolean).length):0;
+      return `<div class="card blk-c combo-c" data-bid="${b.id}">
+        <div class="body">
+          <div class="blk-head">
+            <span class="badge">${esc(b.sub||'(未命名组合)')}</span>
+            <span class="meta" style="color:var(--accent)">🧩 组合</span>
+          </div>
+          <div class="blk-content">${preview}${more}</div>
+          ${negCount?`<div class="meta" style="font-size:11px;margin-top:2px">🚫 含负向 ${negCount} 项</div>`:''}
+          <div class="blk-foot">
+            <div class="meta">用 ${b.usageCount||0} 次</div>
+            <div class="actions">
+              <button class="btn primary" data-act="b-load" data-id="${b.id}">加载</button>
+              <button class="btn" data-act="b-copy" data-id="${b.id}">复制</button>
+              <button class="btn danger" data-act="b-del" data-id="${b.id}">删除</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+    const tr=b.translation?`<div class="tr-line">${esc(b.translation)}</div>`:'<div class="meta" style="margin-top:4px">（未翻译）</div>';
+    return `<div class="card blk-c" data-bid="${b.id}">
+      <div class="body">
+        <div class="blk-head">
+          <span class="badge sub">${esc(b.sub||'')}</span>
+          <span class="meta">用 ${b.usageCount||0} 次</span>
+        </div>
+        <div class="blk-content">${esc(b.content)}</div>
+        ${tr}
+        <div class="blk-foot">
+          <div class="meta">${b.sourceId?`<span class="src-link" data-src="${b.sourceId}">↩ 来源</span>`:''}${tags?' '+(b.sourceId?'· ':'')+tags:''}</div>
+          <div class="actions">
+            <button class="btn" data-act="b-copy" data-id="${b.id}">复制</button>
+            <button class="btn danger" data-act="b-del" data-id="${b.id}">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============ 渲染：拼装台 ============ */
+async function renderComposer(){
+  const blocks=await getAll('blocks');
+  const map=Object.fromEntries(blocks.map(b=>[b.id,b]));
+  composerMap=map;
+  clearHighlight();
+  const chips=document.getElementById('draft-chips');
+  if(!state.draft.length){chips.innerHTML='<span class="meta">从右侧点区块一键加入，或点 × 移除…</span>';}
+  else chips.innerHTML=state.draft.map(id=>{const b=map[id];if(!b)return'';
+    return `<span class="chip-x" data-id="${id}" title="${esc((b.content||'')+'\n'+(b.translation||''))}">
+      <span class="chip-cat">${esc(catName(b.category))}</span>
+      <span class="chip-en">${esc(b.content||'')}</span>
+      ${b.translation?`<span class="chip-zh">${esc(b.translation)}</span>`:''}
+      <b data-rm="${id}" title="移除">×</b>
+    </span>`;}).join('');
+  // 鼠标悬停已选区块 → 在对应 textarea 高亮该段
+  chips.querySelectorAll('.chip-x').forEach(ch=>{
+    ch.addEventListener('mouseenter',()=>highlightBlock(ch.dataset.id));
+    ch.addEventListener('mouseleave',clearHighlight);
+  });
+  refreshAssembled(map);
+  document.getElementById('composer-count').textContent=`已选 ${state.draft.length} 个区块`;
+  await renderBlocksPane();
+}
+function refreshAssembled(map){
+  map=map||composerMap;
+  const blocks=state.draft.map(id=>map[id]).filter(Boolean);
+  const order=b=>{const i=SORT_ORDER.indexOf(b.category);return i<0?99:i;};
+  const positive=blocks.filter(b=>b.category!=='negative').sort((a,b)=>order(a)-order(b)).map(pickEN).filter(Boolean).join(', ');
+  const negative=blocks.filter(b=>b.category==='negative').map(pickEN).filter(Boolean).join(', ');
+  const a=document.getElementById('assembled'), n=document.getElementById('assembled-neg');
+  a.value=positive; n.value=negative;
+  // 内容变长时自动增高（无字数上限，最多到 360/200px 后内部滚动）
+  a.style.height='auto'; a.style.height=Math.min(a.scrollHeight,360)+'px';
+  n.style.height='auto'; n.style.height=Math.min(n.scrollHeight,200)+'px';
+}
+// 鼠标悬停已选区块 → 在对应 textarea 高亮该段（覆盖层技术）
+function highlightBlock(id){
+  const el=composerMap[id]; if(!el) return;
+  const isNeg = el.category==='negative';
+  const ta=document.getElementById(isNeg?'assembled-neg':'assembled');
+  const layer=document.getElementById(isNeg?'hl-neg':'hl-pos');
+  const other=document.getElementById(isNeg?'hl-pos':'hl-neg');
+  if(!ta||!layer) return;
+  const txt=ta.value;
+  const needle=pickEN(el);
+  const escTxt=esc(txt), escNeedle=esc(needle||'');
+  let html=escTxt;
+  if(needle && escTxt.includes(escNeedle)){
+    const i=escTxt.indexOf(escNeedle);
+    html=escTxt.slice(0,i)+'<mark>'+escNeedle+'</mark>'+escTxt.slice(i+escNeedle.length);
+  }
+  layer.querySelector('.hl-inner').innerHTML=html;
+  layer.style.display='block';
+  layer.scrollTop=ta.scrollTop;
+  if(other) other.style.display='none';
+}
+function clearHighlight(){
+  ['hl-pos','hl-neg'].forEach(id=>{const l=document.getElementById(id);if(l)l.style.display='none';});
+}
+async function saveDraft(){await putOne('meta',{id:'draft',value:state.draft});}
+
+/* ============ 渲染：数据 ============ */
+async function renderData(){
+  const [caps,blocks]=await Promise.all([getAll('captures'),getAll('blocks')]);
+  document.getElementById('data-stat').innerHTML=
+    `<div><div class="k">${caps.length}</div><div class="l">收藏条数</div></div>
+     <div><div class="k">${blocks.length}</div><div class="l">区块数量</div></div>`;
+}
+
+/* ============ 渲染：图库 ============ */
+async function renderGallery(){
+  revokeMedia();
+  const grid=document.getElementById('gallery-grid');
+  let caps=await getAll('captures');
+  caps=caps.filter(c=>c.media);
+  const q=(document.getElementById('gal-search').value||'').toLowerCase();
+  if(q)caps=caps.filter(c=>(c.tags||[]).join(' ').toLowerCase().includes(q)||(c.sourceUrl||'').toLowerCase().includes(q));
+  caps.sort((a,b)=>b.createdAt-a.createdAt);
+  document.getElementById('gal-count').textContent=`共 ${caps.length} 张`;
+  if(!caps.length){grid.innerHTML='<div class="empty">还没有图片。点「＋ 添加图片」收藏好看的图；在收藏库里带图保存的也会自动出现在这里。</div>';return;}
+  grid.innerHTML=caps.map(c=>{
+    const u=URL.createObjectURL(c.media.blob);mediaUrls.push(u);
+    const media=c.media.type==='video'?`<video src="${u}" muted loop></video>`:`<img src="${u}" alt="">`;
+    const hasP=!!(c.rawPrompt&&c.rawPrompt.trim());
+    const badge=hasP?'<span class="badge" style="position:absolute;top:8px;left:8px;z-index:2">有提示词</span>':'';
+    return `<div class="card gal-card" data-cid="${c.id}" data-hasp="${hasP}" style="position:relative;cursor:pointer">
+      <div class="thumb" style="height:180px">${media}</div>
+      ${badge}
+      <div class="body"><div class="meta"><span>${(c.tags||[]).map(t=>'#'+t).join(' ')||'无标签'}</span></div></div>
+    </div>`;
+  }).join('');
+}
+function openGalleryAddModal(){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()">
+    <h3>添加图片到图库</h3>
+    <div class="field"><label>图片（上传 / 粘贴 / 网址）</label>
+      <div id="gal-preview" class="thumb" style="height:180px;margin-bottom:8px"><div class="ph">未选择</div></div>
+      <div class="row"><input type="file" id="gal-file" accept="image/*"><input type="text" id="gal-url" placeholder="图片网址…" style="flex:1"></div>
+    </div>
+    <div class="field"><label>标签（可选）</label><input type="text" id="gal-tags" style="width:100%" placeholder="构图, 配色"></div>
+    <div class="field"><label>来源网址（可选）</label><input type="text" id="gal-src" style="width:100%"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="gal-save">保存</button></div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  let pending=null;const prev=document.getElementById('gal-preview');
+  function setM(blob,url){pending=url?{type:'image',url}:{type:'image',blob};prev.innerHTML=url?`<img src="${url}">`:`<img src="${URL.createObjectURL(blob)}">`;}
+  document.getElementById('gal-file').addEventListener('change',e=>{const f=e.target.files[0];if(f)setM(f);});
+  document.getElementById('gal-url').addEventListener('change',e=>{const u=e.target.value.trim();if(u)setM(null,u);});
+  overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){setM(f);toast('已粘贴图片');}break;}}});
+  document.getElementById('gal-save').addEventListener('click',async()=>{
+    if(!pending){toast('请先选择图片');return;}
+    const tags=document.getElementById('gal-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const src=document.getElementById('gal-src').value.trim();
+    await putOne('captures',{id:uid(),media:pending,rawPrompt:'',translation:'',sourceUrl:src,tags,galleryOnly:true,createdAt:Date.now(),blockCount:0});
+    closeModal();toast('已加入图库 ✓');renderGallery();
+  });
+}
+function openLightbox(cid,hasP){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" style="width:min(820px,100%);text-align:center" onclick="event.stopPropagation()">
+    <div id="lb-media" style="max-height:70vh;overflow:auto"></div>
+    <div class="row" style="justify-content:center;margin-top:12px">
+      ${hasP?`<button class="btn primary" id="lb-jump">查看提示词 →</button>`:''}
+      <button class="btn" onclick="closeModal()">关闭</button>
+    </div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');
+  overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  getOne('captures',cid).then(c=>{ if(c&&c.media){const u=URL.createObjectURL(c.media.blob);document.getElementById('lb-media').innerHTML=c.media.type==='video'?`<video src="${u}" controls style="max-width:100%"></video>`:`<img src="${u}" style="max-width:100%">`;}});
+  if(hasP)document.getElementById('lb-jump').addEventListener('click',()=>{closeModal();goToSource(cid);});
+}
+
+/* ============ 视图切换 ============ */
+function setView(v){
+  state.view=v;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
+  ['captures','composer','data','gallery'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
+  if(v==='captures')renderCaptures();
+  if(v==='composer')renderComposer();
+  if(v==='data')renderData();
+  if(v==='gallery')renderGallery();
+}
+function goToSource(sourceId){ state.highlightId=sourceId; setView('captures'); }
+
+/* ============ 弹窗：新增收藏 ============ */
+function openCaptureModal(){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1">
+    <div class="modal" onclick="event.stopPropagation()">
+      <h3>新增收藏 <small>支持 Ctrl+V 粘贴图片</small></h3>
+      <div class="field"><label>媒体（图片 / 视频，可上传或直接粘贴）</label>
+        <div id="cap-preview" class="thumb" style="height:160px;margin-bottom:8px"><div class="ph">未选择媒体</div></div>
+        <div class="row">
+          <input type="file" id="cap-file" accept="image/*,video/*">
+          <input type="text" id="cap-url" placeholder="或粘贴图片/视频网址…" style="flex:1">
+        </div>
+        <div class="paste-hint">提示：在别处复制图片后，聚焦此窗口按 Ctrl+V 即可粘入。</div>
+      </div>
+      <div class="field"><label>提示词全文</label><textarea id="cap-prompt" placeholder="把整段提示词粘贴到这里…"></textarea>
+      <div class="tr-preview loading" id="cap-tr"><span class="lbl">🌐 中文翻译（自动）</span><span class="txt">输入英文提示词后将自动显示中文翻译…</span></div>
+      </div>
+      <div class="field"><label>来源网址（可选）</label><input type="text" id="cap-source" style="width:100%" placeholder="https://…"></div>
+      <div class="field"><label>标签（逗号分隔，可选）</label><input type="text" id="cap-tags" style="width:100%" placeholder="国风, 写实, 人像"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn primary" id="cap-save">保存</button>
+      </div>
+    </div></div>`;
+  const overlay=root.querySelector('.overlay');
+  overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  let pendingMedia=null;
+  const prev=document.getElementById('cap-preview');
+  function setMedia(blob,type,url){
+    pendingMedia = url? {type,url} : {type,blob};
+    prev.innerHTML = url? (type==='video'?`<video src="${url}" controls></video>`:`<img src="${url}" alt="">`)
+                        : (type==='video'?`<video src="${URL.createObjectURL(blob)}" controls></video>`:`<img src="${URL.createObjectURL(blob)}" alt="">`);
+  }
+  document.getElementById('cap-file').addEventListener('change',e=>{const f=e.target.files[0];if(f)setMedia(f,f.type.startsWith('video')?'video':'image');});
+  document.getElementById('cap-url').addEventListener('change',e=>{const u=e.target.value.trim();if(u)setMedia(null,/\.(mp4|webm|mov)$/i.test(u)?'video':'image',u);});
+  overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){setMedia(f,'image');toast('已粘贴图片');}break;}}});
+  // 实时翻译提示词 → 写入 #cap-tr（去抖 700ms）
+  async function translateCapPrompt(){
+    const raw=document.getElementById('cap-prompt').value.trim();
+    const box=document.getElementById('cap-tr');
+    const txt=box.querySelector('.txt');
+    if(!raw){ box.classList.add('loading'); txt.textContent='输入英文提示词后将自动显示中文翻译…'; box.dataset.tr=''; return; }
+    box.classList.add('loading'); txt.textContent='翻译中…';
+    try{
+      const from=/[一-鿿]/.test(raw)?'zh':'en';
+      const to=from==='zh'?'en':'zh';
+      const t=await translateText(raw,from,to);
+      txt.textContent=t; box.classList.remove('loading'); box.dataset.tr=t;
+    }catch(e){ txt.textContent='翻译失败：'+(e.message||e); box.classList.remove('loading'); box.dataset.tr=''; }
+  }
+  let capTrTimer;
+  document.getElementById('cap-prompt').addEventListener('input',()=>{
+    clearTimeout(capTrTimer);capTrTimer=setTimeout(translateCapPrompt,700);
+  });
+  document.getElementById('cap-save').addEventListener('click',async()=>{
+    const raw=document.getElementById('cap-prompt').value.trim();
+    const source=document.getElementById('cap-source').value.trim();
+    const tags=document.getElementById('cap-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    if(!raw && !pendingMedia){toast('至少填写提示词或媒体');return;}
+    // 优先用右侧已翻译好的中文；为空则现翻一次
+    let translation=document.getElementById('cap-tr').dataset.tr || '';
+    if(!translation && raw){
+      try{ const f=/[一-鿿]/.test(raw)?'zh':'en'; const t=f==='zh'?'en':'zh'; translation=await translateText(raw,f,t);}catch(e){}
+    }
+    const cap={id:uid(),media:pendingMedia,rawPrompt:raw,translation,sourceUrl:source,tags,createdAt:Date.now(),blockCount:0};
+    await putOne('captures',cap);
+    closeModal();toast('已保存 ✓'+(translation?'（含译文）':''));renderCaptures();
+    // 自动打开拆解
+    openDecomposeModal(cap.id,raw);
+  });
+}
+function closeModal(){document.getElementById('modal-root').innerHTML='';}
+
+/* ============ 保存组合 / 加载组合 ============ */
+function openSaveComboModal(){
+  const positive=document.getElementById('assembled').value.trim();
+  const negative=document.getElementById('assembled-neg').value.trim();
+  if(!positive && !negative){toast('当前拼装台为空，没东西可保存');return;}
+  const root=document.getElementById('modal-root');
+  const preview=(positive+(negative?'\n\n—— 负向 ——\n'+negative:'')).slice(0,600);
+  root.innerHTML=`<div class="overlay" data-close="1">
+    <div class="modal" onclick="event.stopPropagation()" style="width:min(560px,100%)">
+      <h3>💾 保存组合 <small>到「组合」分类，下次一键加载</small></h3>
+      <div class="field"><label>组合名称</label>
+        <input id="cmb-name" type="text" style="width:100%" placeholder="例如：古风人像-月光亭台" autofocus>
+      </div>
+      <div class="field"><label>预览</label>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;max-height:200px;overflow-y:auto;white-space:pre-wrap;line-height:1.6">${esc(preview)}</div>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn primary" id="cmb-save">保存到组合库</button>
+      </div>
+    </div>
+  </div>`;
+  const overlay=root.querySelector('.overlay');
+  overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  document.getElementById('cmb-name').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('cmb-save').click();});
+  document.getElementById('cmb-save').addEventListener('click',async()=>{
+    const name=document.getElementById('cmb-name').value.trim();
+    if(!name){toast('请输入组合名称');return;}
+    const block={id:uid(),category:'combo',sub:name,content:positive,negative:negative,translation:'',tags:['组合'],isCombo:true,usageCount:0,createdAt:Date.now()};
+    await putOne('blocks',block);
+    closeModal();
+    toast(`已保存组合「${name}」✓`);
+    if(state.view==='composer')renderComposer();
+  });
+}
+function loadComposition(b){
+  if(!b)return;
+  document.getElementById('assembled').value=b.content||'';
+  document.getElementById('assembled-neg').value=b.negative||'';
+  // 用例计数
+  b.usageCount=(b.usageCount||0)+1;
+  putOne('blocks',b);
+  toast(`已加载组合：${b.sub||'(未命名)'}`);
+}
+
+/* ============ 弹窗：管理分类与标签 ============ */
+function openCatTagManager(){
+  const root=document.getElementById('modal-root');
+  const workCats=CATEGORIES.map(c=>({id:c.id,name:c.name,subs:[...(c.subs||[])]}));
+  (async()=>{
+    const [blocks,caps]=await Promise.all([getAll('blocks'),getAll('captures')]);
+    const tagSet=new Set();
+    blocks.forEach(b=>(b.tags||[]).forEach(t=>tagSet.add(t)));
+    caps.forEach(c=>(c.tags||[]).forEach(t=>tagSet.add(t)));
+    const allTags=[...tagSet].sort();
+    const tagMap={}; allTags.forEach(t=>tagMap[t]=t); // 旧标签 → 新标签（空串＝删除）
+    root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(720px,100%);max-height:88vh;display:flex;flex-direction:column">
+      <h3>管理分类与标签 <small>增 / 删 / 改名，全部即时持久化</small></h3>
+      <div class="row" style="gap:6px;margin-bottom:8px">
+        <button class="cat-tab active" data-mtab="cats">📂 分类</button>
+        <button class="cat-tab" data-mtab="tags">🏷 标签（${allTags.length}）</button>
+      </div>
+      <div id="mtab-cats" class="mtab">
+        <div id="cat-edit-list"></div>
+        <button class="btn" id="cat-add-new" style="margin-top:8px">＋ 新增分类</button>
+      </div>
+      <div id="mtab-tags" class="mtab" hidden>
+        <div id="tag-edit-list"></div>
+        <div class="meta" style="margin-top:6px">改名会同步到所有用到它的区块/收藏；删除则从其上移除（同区块内的重复标签自动合并）。</div>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:12px">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn primary" id="cat-tag-save">保存</button>
+      </div>
+    </div></div>`;
+    const overlay=root.querySelector('.overlay');
+    overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+    // —— 分类编辑 ——
+    function renderCatEditor(){
+      const el=document.getElementById('cat-edit-list');
+      el.innerHTML=workCats.map((c,i)=>`
+        <div class="cat-edit-row" data-i="${i}">
+          <div class="cat-edit-main">
+            <input class="cat-name" value="${esc(c.name)}" placeholder="分类名称">
+            <div class="cat-subs">
+              ${(c.subs||[]).map((s,si)=>`<span class="sub-chip" data-si="${si}">${esc(s)} <b class="sub-x">×</b></span>`).join('')}
+              <input class="sub-add" placeholder="＋ 子分类" style="width:110px">
+            </div>
+          </div>
+          <div class="cat-edit-ops">
+            <button class="btn mini" data-act="up" ${i===0?'disabled':''}>↑</button>
+            <button class="btn mini" data-act="down" ${i===workCats.length-1?'disabled':''}>↓</button>
+            <button class="btn mini danger" data-act="del">✕</button>
+          </div>
+        </div>`).join('');
+      el.querySelectorAll('.cat-edit-row').forEach(row=>{
+        const i=+row.dataset.i;
+        row.querySelector('.cat-name').addEventListener('input',e=>workCats[i].name=e.target.value);
+        row.querySelector('.sub-add').addEventListener('keydown',e=>{
+          if(e.key==='Enter'){const v=e.target.value.trim();if(v){workCats[i].subs.push(v);e.target.value='';renderCatEditor();}}
+        });
+        row.querySelectorAll('.sub-chip .sub-x').forEach(x=>x.addEventListener('click',()=>{
+          const si=+x.closest('.sub-chip').dataset.si;workCats[i].subs.splice(si,1);renderCatEditor();
+        }));
+        row.querySelector('[data-act="up"]').addEventListener('click',()=>{if(i>0){[workCats[i-1],workCats[i]]=[workCats[i],workCats[i-1]];renderCatEditor();}});
+        row.querySelector('[data-act="down"]').addEventListener('click',()=>{if(i<workCats.length-1){[workCats[i+1],workCats[i]]=[workCats[i],workCats[i+1]];renderCatEditor();}});
+        row.querySelector('[data-act="del"]').addEventListener('click',()=>{workCats.splice(i,1);renderCatEditor();});
+      });
+    }
+    renderCatEditor();
+    document.getElementById('cat-add-new').addEventListener('click',()=>{
+      workCats.push({id:'cat_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'新分类',subs:[]});
+      renderCatEditor();
+      const last=document.querySelector('.cat-edit-row:last-child .cat-name');if(last){last.focus();last.select();}
+    });
+    // —— 标签编辑 ——
+    function renderTagEditor(){
+      const el=document.getElementById('tag-edit-list');
+      if(!allTags.length){el.innerHTML='<div class="empty">暂无标签</div>';return;}
+      el.innerHTML=allTags.map(t=>`
+        <div class="tag-edit-row" data-t="${esc(t)}">
+          <input class="tag-name" value="${esc(tagMap[t])}" placeholder="标签名">
+          <button class="btn mini danger" data-act="del">✕</button>
+        </div>`).join('');
+      el.querySelectorAll('.tag-edit-row').forEach(row=>{
+        const t=row.dataset.t;
+        row.querySelector('.tag-name').addEventListener('input',e=>tagMap[t]=e.target.value.trim());
+        row.querySelector('[data-act="del"]').addEventListener('click',()=>{tagMap[t]='';renderTagEditor();});
+      });
+    }
+    renderTagEditor();
+    // —— tab 切换 ——
+    root.querySelectorAll('[data-mtab]').forEach(btn=>btn.addEventListener('click',()=>{
+      root.querySelectorAll('[data-mtab]').forEach(b=>b.classList.toggle('active',b===btn));
+      const tab=btn.dataset.mtab;
+      document.getElementById('mtab-cats').hidden=tab!=='cats';
+      document.getElementById('mtab-tags').hidden=tab!=='tags';
+    }));
+    // —— 保存 ——
+    document.getElementById('cat-tag-save').addEventListener('click',async()=>{
+      if(workCats.some(c=>!c.name.trim())){toast('分类名称不能为空');return;}
+      const oldIds=new Set(CATEGORIES.map(c=>c.id));
+      const newIds=new Set(workCats.map(c=>c.id));
+      const deleted=[...oldIds].filter(id=>!newIds.has(id));
+      let reassigned=0, fallbackName='';
+      if(deleted.length){
+        const fb=workCats.find(c=>c.id==='general')||workCats[0];
+        const fbId=fb?fb.id:null;
+        if(fbId){
+          fallbackName=catName(fbId);
+          for(const b of await getAll('blocks')){
+            if(deleted.includes(b.category)){ b.category=fbId; await putOne('blocks',b); reassigned++; }
+          }
+        }
+      }
+      CATEGORIES=workCats.map(c=>({id:c.id,name:c.name.trim(),subs:[...c.subs]}));
+      syncSortOrder();
+      await saveCategories();
+      // 同步标签（重命名 / 删除）
+      if(allTags.length){
+        const remap=t=>{ const nv=tagMap[t]; return nv===undefined? t : nv; };
+        for(const b of await getAll('blocks')){
+          if(b.tags&&b.tags.length){ const nt=[...new Set(b.tags.map(remap).filter(Boolean))]; if(JSON.stringify(nt)!==JSON.stringify(b.tags)){b.tags=nt;await putOne('blocks',b);} }
+        }
+        for(const c of await getAll('captures')){
+          if(c.tags&&c.tags.length){ const nt=[...new Set(c.tags.map(remap).filter(Boolean))]; if(JSON.stringify(nt)!==JSON.stringify(c.tags)){c.tags=nt;await putOne('captures',c);} }
+        }
+      }
+      closeModal();
+      let msg='已保存分类设置 ✓';
+      if(reassigned) msg+=`（${reassigned} 个区块已移到「${fallbackName}」）`;
+      toast(msg);
+      renderBlocksPane(); if(state.view==='composer')renderComposer();
+    });
+  })();
+}
+
+/* ============ 翻译 ============ */
+async function translateText(text,from,to){
+  const q=encodeURIComponent(text);
+  const candidates=[
+    'https://translate.googleapis.com/translate_a/single?client=gtx&sl='+from+'&tl='+to+'&dt=t&q='+q,
+    'https://api.mymemory.translated.net/get?q='+q+'&langpair='+from+'|'+to
+  ];
+  for(const url of candidates){
+    try{
+      const r=await fetch(url);const j=await r.json();
+      let t = url.includes('mymemory') ? (j.responseData&&j.responseData.translatedText) : (j[0]&&j[0].map(x=>x[0]).join(''));
+      if(t && !/MYMEMORY WARNING/.test(t)) return t;
+    }catch(e){/* 尝试下一个接口 */}
+  }
+  throw new Error('所有翻译接口均不可用，请检查网络后重试');
+}
+
+
+/* ============ 弹窗：拆解 ============ */
+function openDecomposeModal(capId,raw){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(900px,100%)">
+    <h3>拆解提示词 <small>每行一个片段，指定分类后可复用</small></h3>
+    <div class="field"><label>提示词全文（编辑后点「重新按行生成」）</label>
+      <textarea id="dec-raw">${esc(raw)}</textarea>
+      <div class="tr-preview loading" id="dec-raw-tr"><span class="lbl">🌐 全文中文翻译</span><span class="txt">翻译中…</span></div>
+      <button class="btn" id="dec-gen" style="margin-top:6px">重新按行生成</button>
+    </div>
+    <div class="field"><label>片段列表（每行下方显示中文翻译，方便选标签）</label><div id="dec-rows"></div>
+      <button class="btn" id="dec-add" style="margin-top:6px">＋ 手动加一行</button>
+    </div>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn" onclick="closeModal()">稍后</button>
+      <button class="btn primary" id="dec-save">保存区块</button>
+    </div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');
+  overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  const rowsEl=document.getElementById('dec-rows');
+  function catOptions(sel){return CATEGORIES.map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.name}</option>`).join('');}
+  function subOptions(catId,sel){return catSubs(catId).map(s=>`<option value="${s}" ${s===sel?'selected':''}>${s}</option>`).join('');}
+  // 翻译单行片段 → 写入该行的 .dec-tr
+  async function translateRow(row){
+    const input=row.querySelector('.dec-content');
+    const trCell=row.querySelector('.dec-tr');
+    const txt=input.value.trim();
+    if(!txt){ trCell.className='dec-tr empty'; trCell.textContent='（空）'; trCell.dataset.tr=''; return; }
+    trCell.className='dec-tr loading'; trCell.textContent='翻译中…';
+    try{
+      const from=/[一-鿿]/.test(txt)?'zh':'en';
+      const to=from==='zh'?'en':'zh';
+      const t=await translateText(txt,from,to);
+      trCell.className='dec-tr'; trCell.textContent=t; trCell.dataset.tr=t;
+    }catch(e){ trCell.className='dec-tr empty'; trCell.textContent='翻译失败'; trCell.dataset.tr=''; }
+  }
+  // 翻译全文 → 写入 #dec-raw-tr
+  async function translateRaw(){
+    const raw=document.getElementById('dec-raw').value.trim();
+    const box=document.getElementById('dec-raw-tr');
+    const txt=box.querySelector('.txt');
+    if(!raw){ box.classList.add('loading'); txt.textContent='（空）'; box.dataset.tr=''; return; }
+    box.classList.add('loading'); txt.textContent='翻译中…';
+    try{
+      const from=/[一-鿿]/.test(raw)?'zh':'en';
+      const to=from==='zh'?'en':'zh';
+      const t=await translateText(raw,from,to);
+      txt.textContent=t; box.classList.remove('loading'); box.dataset.tr=t;
+    }catch(e){ txt.textContent='翻译失败：'+(e.message||e); box.classList.remove('loading'); box.dataset.tr=''; }
+  }
+  function addRow(content='',cat='booster',sub=catSubs('booster')[0],tag=''){
+    const row=document.createElement('div');row.className='decomp-row';
+    row.innerHTML=`<div class="decomp-cell">
+        <input class="dec-content" value="${esc(content)}" placeholder="片段内容">
+        <div class="dec-tr loading" data-tr="">翻译中…</div>
+      </div>
+      <select class="dec-cat">${catOptions(cat)}</select>
+      <select class="dec-sub">${subOptions(cat,sub)}</select>
+      <input class="dec-tag" value="${esc(tag)}" placeholder="标签">
+      <button class="btn dec-del">✕</button>`;
+    row.querySelector('.dec-cat').addEventListener('change',e=>{
+      const subSel=row.querySelector('.dec-sub');subSel.innerHTML=subOptions(e.target.value,catSubs(e.target.value)[0]);});
+    row.querySelector('.dec-del').addEventListener('click',()=>row.remove());
+    row.querySelector('.dec-content').addEventListener('input',()=>translateRow(row));
+    rowsEl.appendChild(row);
+    translateRow(row);
+  }
+  function gen(){
+    rowsEl.innerHTML='';
+    const raw=document.getElementById('dec-raw').value;
+    // 按逗号 / 句号（中英文）拆分
+    const parts=raw.split(/[,，.。]+/).map(s=>s.trim()).filter(Boolean);
+    // 自动去重（不区分大小写、忽略首尾空格）
+    const seen=new Set();const uniq=[];let dup=0;
+    parts.forEach(p=>{
+      const key=p.toLowerCase();
+      if(seen.has(key)){dup++;return;}
+      seen.add(key);uniq.push(p);
+    });
+    uniq.forEach(l=>addRow(l));
+    if(dup>0) toast(`自动去重 ${dup} 个重复片段`);
+    translateRaw();
+  }
+  // 全文编辑时也实时翻译（去抖 600ms）
+  let rawTimer;
+  document.getElementById('dec-raw').addEventListener('input',()=>{
+    clearTimeout(rawTimer);rawTimer=setTimeout(translateRaw,600);
+  });
+  document.getElementById('dec-gen').addEventListener('click',gen);
+  document.getElementById('dec-add').addEventListener('click',()=>addRow());
+  document.getElementById('dec-save').addEventListener('click',async()=>{
+    const rows=[...rowsEl.querySelectorAll('.decomp-row')];
+    let n=0;
+    for(const r of rows){
+      const content=r.querySelector('.dec-content').value.trim();if(!content)continue;
+      const category=r.querySelector('.dec-cat').value;
+      const sub=r.querySelector('.dec-sub').value;
+      const tags=r.querySelector('.dec-tag').value.split(',').map(s=>s.trim()).filter(Boolean);
+      // 优先用行内已翻译好的中文；如果空则现翻一次
+      let translation=r.querySelector('.dec-tr')?.dataset.tr || '';
+      if(!translation){
+        try{ const f=/[一-鿿]/.test(content)?'zh':'en'; const t=f==='zh'?'en':'zh'; translation=await translateText(content,f,t);}catch(e){}
+      }
+      await putOne('blocks',{id:uid(),category,sub,content,translation,tags,sourceId:capId,usageCount:0,createdAt:Date.now()});
+      n++;
+    }
+    const cap=await getOne('captures',capId);if(cap){cap.blockCount=(cap.blockCount||0)+n;await putOne('captures',cap);}
+    closeModal();toast(`已拆出 ${n} 个区块 ✓`);
+    if(state.view==='captures')renderCaptures();if(state.view==='composer')renderComposer();
+  });
+  gen();
+  // 初始打开时，gen 内部已触发 translateRaw；再补一次保证（如果 raw 非空）
+  setTimeout(translateRaw,50);
+}
+
+/* ============ 事件绑定 ============ */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setView(t.dataset.view)));
+document.getElementById('add-capture').addEventListener('click',openCaptureModal);
+document.getElementById('cap-search').addEventListener('input',renderCaptures);
+document.getElementById('cap-type').addEventListener('change',renderCaptures);
+// 拼装台右栏：搜索 + 分类切换 + 卡片点击
+document.getElementById('blk-q').addEventListener('input',e=>{state.blkSearch=e.target.value;renderBlocksPane();});
+document.getElementById('cat-manage').addEventListener('click',openCatTagManager);
+document.getElementById('cat-tabs').addEventListener('click',e=>{
+  const tab=e.target.closest('.cat-tab');if(!tab)return;
+  state.activeCat=tab.dataset.cat;renderBlocksPane();
+});
+document.getElementById('blocks-list').addEventListener('click',async e=>{
+  const src=e.target.closest('.src-link');if(src){e.stopPropagation();goToSource(src.dataset.src);return;}
+  const btn=e.target.closest('button[data-act]');if(btn){e.stopPropagation();
+    if(btn.dataset.act==='b-copy'){
+      const b=await getOne('blocks',btn.dataset.id);if(!b)return;
+      const txt=b.isCombo ? ((b.content||'')+(b.negative?'\n\nNegative: '+(b.negative):'')) : b.content;
+      b.usageCount=(b.usageCount||0)+1;await putOne('blocks',b);copyText(txt);
+      btn.closest('.blk-c').classList.add('added');setTimeout(()=>btn.closest('.blk-c')?.classList.remove('added'),800);
+      renderBlocksPane();
+    }
+    if(btn.dataset.act==='b-load'){
+      const b=await getOne('blocks',btn.dataset.id);if(!b)return;
+      loadComposition(b);
+    }
+    if(btn.dataset.act==='b-del'){
+      if(!confirm('确定删除这个区块？'))return;
+      await delOne('blocks',btn.dataset.id);
+      state.draft=state.draft.filter(x=>x!==btn.dataset.id);
+      await saveDraft();
+      toast('已删除');
+      // 重新渲染（blocks-list 是从 composer 视图触发，state.view 必为 composer）
+      if(state.view==='composer')renderComposer();
+    }
+    return;
+  }
+  const card=e.target.closest('.blk-c');if(!card)return;
+  const b=await getOne('blocks',card.dataset.bid);if(!b)return;
+  // combo 卡片整体点击 → 加载
+  if(b.isCombo){
+    loadComposition(b);
+    card.classList.add('added');setTimeout(()=>card.classList.remove('added'),800);
+    return;
+  }
+  // 普通 block → 加入 draft（按区块 id + 按内容双重去重）
+  if(state.draft.includes(b.id)){
+    toast('该区块已在已选区块中');
+  } else {
+    const newKey=pickEN(b).trim().toLowerCase();
+    const dup = newKey && state.draft.some(id=>{
+      const ob=composerMap[id];
+      return ob && pickEN(ob).trim().toLowerCase()===newKey;
+    });
+    if(dup){
+      toast('该片段内容已存在于已选区块中，不重复添加');
+    } else {
+      state.draft.push(b.id);
+      b.usageCount=(b.usageCount||0)+1;
+      await putOne('blocks',b);await saveDraft();
+      card.classList.add('added');setTimeout(()=>card.classList.remove('added'),800);
+    }
+  }
+  renderComposer();
+});
+// 图库
+document.getElementById('add-image').addEventListener('click',openGalleryAddModal);
+document.getElementById('gal-search').addEventListener('input',renderGallery);
+document.getElementById('gallery-grid').addEventListener('click',e=>{const card=e.target.closest('.gal-card');if(!card)return;openLightbox(card.dataset.cid,card.dataset.hasp==='true');});
+// 收藏库点击委托
+document.getElementById('capture-grid').addEventListener('click',async e=>{
+  // 缩略图点击 → 放大预览
+  const thumb=e.target.closest('.thumb');
+  if(thumb){
+    const card=thumb.closest('.card');if(!card)return;
+    const cid=card.dataset.cid;
+    const c=await getOne('captures',cid);
+    if(c && c.media){openLightbox(cid,!!(c.rawPrompt&&c.rawPrompt.trim()));}
+    return;
+  }
+  const btn=e.target.closest('button[data-act]');if(!btn)return;
+  const id=btn.dataset.id;
+  if(btn.dataset.act==='decomp'){const c=await getOne('captures',id);openDecomposeModal(id,c?c.rawPrompt:'');}
+  if(btn.dataset.act==='copy'){const c=await getOne('captures',id);if(c)copyText(c.rawPrompt||'');}
+  if(btn.dataset.act==='del'){if(confirm('确定删除这条收藏？关联的区块也会删除。')){const c=await getOne('captures',id);const bs=await getAll('blocks');for(const b of bs.filter(x=>x.sourceId===id))await delOne('blocks',b.id);await delOne('captures',id);toast('已删除');renderCaptures();}}
+});
+// 拼装台
+document.getElementById('draft-chips').addEventListener('click',async e=>{
+  const rm=e.target.dataset.rm;if(rm){state.draft=state.draft.filter(x=>x!==rm);await saveDraft();renderComposer();}
+});
+document.getElementById('composer-clear').addEventListener('click',async()=>{state.draft=[];await saveDraft();renderComposer();});
+document.getElementById('composer-save-combo').addEventListener('click',openSaveComboModal);
+document.getElementById('composer-copy-pos').addEventListener('click',()=>copyText(document.getElementById('assembled').value));
+document.getElementById('composer-copy-neg').addEventListener('click',()=>copyText(document.getElementById('assembled-neg').value));
+// textarea 手动编辑时也自动增高
+document.getElementById('assembled').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,360)+'px';});
+document.getElementById('assembled-neg').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,200)+'px';});
+// 高亮层随 textarea 滚动同步
+['assembled','assembled-neg'].forEach(id=>{
+  const ta=document.getElementById(id);
+  const layer=document.getElementById(id==='assembled'?'hl-pos':'hl-neg');
+  ta.addEventListener('scroll',()=>{if(layer && layer.style.display!=='none')layer.scrollTop=ta.scrollTop;});
+});
+// 拼装台右上：翻译小卡（折叠 + 翻译 + 复制）
+document.getElementById('tr-mini-toggle').addEventListener('click',()=>{const b=document.getElementById('tr-mini-body');if(b.hasAttribute('hidden'))b.removeAttribute('hidden');else b.setAttribute('hidden','');});
+document.getElementById('tr-mini-go').addEventListener('click',async()=>{
+  const src=document.getElementById('tr-mini-src').value.trim();if(!src){toast('请输入内容');return;}
+  const [f,t]=document.getElementById('tr-mini-dir').value.split('|');
+  const dst=document.getElementById('tr-mini-dst');dst.value='翻译中…';
+  try{const res=await translateText(src,f,t);dst.value=res;}catch(e){dst.value='翻译失败：'+(e.message||e);}
+});
+document.getElementById('tr-mini-copy').addEventListener('click',()=>copyText(document.getElementById('tr-mini-dst').value));
+// 数据
+document.getElementById('export-btn').addEventListener('click',async()=>{
+  const [captures,blocks]=await Promise.all([getAll('captures'),getAll('blocks')]);
+  // 媒体转 base64 以便导出
+  const exp={version:1,exportedAt:Date.now(),captures:[],blocks};
+  for(const c of captures){const cc={...c};if(c.media&&c.media.blob){cc.media={...c.media,dataUrl:await blobToDataURL(c.media.blob)};delete cc.media.blob;}exp.captures.push(cc);}
+  const blob=new Blob([JSON.stringify(exp)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='prompt-vault-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  toast('已导出 ✓');
+});
+document.getElementById('import-btn').addEventListener('click',()=>document.getElementById('import-file').click());
+document.getElementById('import-file').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const data=JSON.parse(await f.text());
+  let needTr=0,trOk=0;
+  for(const c of data.captures||[]){
+    const cc={...c};
+    if(c.media&&c.media.dataUrl){cc.media={...c.media,blob:await dataURLToBlob(c.media.dataUrl)};delete cc.media.dataUrl;}
+    // 导入时自动补翻译
+    if(cc.rawPrompt && cc.rawPrompt.trim() && (!cc.translation || !cc.translation.trim())){
+      needTr++;
+      try{
+        const from=/[一-鿿]/.test(cc.rawPrompt)?'zh':'en';
+        const to=from==='zh'?'en':'zh';
+        cc.translation=await translateText(cc.rawPrompt,from,to);
+        trOk++;
+      }catch(_){}
+    }
+    await putOne('captures',cc);
+  }
+  for(const b of data.blocks||[]){
+    if(b.content && b.content.trim() && (!b.translation || !b.translation.trim())){
+      try{
+        const from=/[一-鿿]/.test(b.content)?'zh':'en';
+        const to=from==='zh'?'en':'zh';
+        b.translation=await translateText(b.content,from,to);
+      }catch(_){}
+    }
+    await putOne('blocks',b);
+  }
+  const tip=needTr?`（自动翻译 ${trOk}/${needTr}）`:'';
+  toast('导入完成 ✓'+tip);setView('captures');renderCaptures();
+});
+document.getElementById('clear-btn').addEventListener('click',async()=>{
+  if(!confirm('确定清空全部收藏与区块？此操作不可恢复，建议先导出备份。'))return;
+  for(const c of await getAll('captures'))await delOne('captures',c.id);
+  for(const b of await getAll('blocks'))await delOne('blocks',b.id);
+  state.draft=[];await saveDraft();toast('已清空');setView('captures');renderCaptures();
+});
+function blobToDataURL(b){return new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b);});}
+function dataURLToBlob(u){return fetch(u).then(r=>r.blob());}
+
+/* ============ 启动 ============ */
+async function seedIfEmpty(){
+  const caps=await getAll('captures');if(caps.length)return;
+  const capId=uid();
+  await putOne('captures',{id:capId,media:null,rawPrompt:
+`masterpiece, best quality, 8k, ultra-detailed
+long flowing silver hair, braided crown
+intricate red hanfu with gold embroidery
+ancient Chinese pavilion by a moonlit lake, cinematic lighting, photorealistic
+slow dolly in, gentle camera drift`,translation:
+`杰作，最佳画质，8k，超精细
+银色长发飘逸，编成花冠
+精致的红色汉服，金色刺绣
+月光湖泊边的中国古代亭台，电影感打光，照片级写实
+缓慢推镜，轻微镜头漂移`,sourceUrl:'https://example.com/demo',tags:['国风','写实','人像'],createdAt:Date.now(),blockCount:0});
+  const seed=[
+    ['booster','通用增强','masterpiece, best quality, 8k, ultra-detailed','杰作，最佳画质，8k，超精细',[]],
+    ['character','发型','long flowing silver hair, braided crown','银色长发飘逸，编成花冠',['人像']],
+    ['character','服装','intricate red hanfu with gold embroidery','精致的红色汉服，金色刺绣',['国风']],
+    ['scene','地点','ancient Chinese pavilion by a moonlit lake','月光湖泊边的中国古代亭台',['国风']],
+    ['style','艺术风格','cinematic lighting, photorealistic','电影感打光，照片级写实',[]],
+    ['video','运镜','slow dolly in, gentle camera drift','缓慢推镜，轻微镜头漂移',[]],
+  ];
+  for(const [cat,sub,content,translation,tags] of seed)await putOne('blocks',{id:uid(),category:cat,sub,content,translation,tags,sourceId:capId,usageCount:0,createdAt:Date.now()});
+  const c=await getOne('captures',capId);c.blockCount=seed.length;await putOne('captures',c);
+}
+(async()=>{
+  await openDB();
+  await loadCategories();
+  const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
+  await seedIfEmpty();
+  setView('captures');
+})();
+</script>
+</body>
+</html>
