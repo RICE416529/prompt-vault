@@ -358,16 +358,32 @@ function syncSortOrder(){
 
 /* ============ 数据库 ============ */
 const DB_NAME='promptvault', DB_VER=2;
-let db;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VER);
-  r.onupgradeneeded=e=>{const d=e.target.result;
-    ['captures','blocks','meta','assets','projects'].forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'});});};
-  r.onsuccess=e=>{db=e.target.result;res();};r.onerror=e=>rej(e.target.error);});}
-function st(name,mode){return db.transaction(name,mode).objectStore(name);}
-function getAll(name){return new Promise((res,rej)=>{const r=st(name,'readonly').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
-function getOne(name,key){return new Promise((res,rej)=>{const r=st(name,'readonly').get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-function putOne(name,v){return new Promise((res,rej)=>{const r=st(name,'readwrite').put(v);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});}
-function delOne(name,key){return new Promise((res,rej)=>{const r=st(name,'readwrite').delete(key);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});}
+let db, dbReady;
+function openDB(){
+  if(dbReady) return dbReady;
+  dbReady = new Promise((res,rej)=>{
+    if(typeof indexedDB==='undefined'){ rej(new Error('当前浏览器不支持本地数据库（IndexedDB）')); return; }
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e=>{
+      const d = e.target.result;
+      ['captures','blocks','meta','assets','projects'].forEach(s=>{
+        if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:'id'});
+      });
+    };
+    r.onsuccess = e=>{ db=e.target.result; res(); };
+    r.onerror   = e=>{ rej(e.target.error || new Error('数据库打开失败')); };
+    r.onblocked = ()=>{ rej(new Error('数据库被其他页面占用，请关闭其他打开的本页面标签页后刷新')); };
+  });
+  return dbReady;
+}
+// 任意 DB 操作都先等数据库真正就绪，避免 db 为 undefined 时读到 transaction 报错
+async function st(name,mode){ await dbReady; if(!db) throw new Error('数据库尚未就绪，请刷新页面'); return db.transaction(name,mode).objectStore(name); }
+async function getAll(name){ const s=await st(name,'readonly'); return new Promise((res,rej)=>{const r=s.getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}); }
+async function getOne(name,key){ const s=await st(name,'readonly'); return new Promise((res,rej)=>{const r=s.get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}); }
+async function putOne(name,v){ const s=await st(name,'readwrite'); return new Promise((res,rej)=>{const r=s.put(v);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);}); }
+async function delOne(name,key){ const s=await st(name,'readwrite'); return new Promise((res,rej)=>{const r=s.delete(key);r.onsuccess=()=>res();r.onerror=()=>rej(r.error);}); }
+// 脚本加载即开始打开数据库，确保之后任意时刻调用都有 dbReady 可等待
+dbReady = openDB();
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 /* ============ 状态 ============ */
@@ -1666,15 +1682,20 @@ window.addEventListener('error',e=>{ try{ toast('出错：'+(e.message||e.error|
 window.addEventListener('unhandledrejection',e=>{ try{ const r=e.reason; toast('出错：'+((r&&r.message)||r||'未知错误')); }catch(_){} });
 
 (async()=>{
-  await openDB();
-  await loadCategories();
-  const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
-  await seedIfEmpty();
-  await seedAssetsIfEmpty();
-  await loadAssetPresets();
-  await populateProjects();
-  renderAssetCatTabs();
-  setView('captures');
+  try{
+    await openDB();
+    await loadCategories();
+    const d=await getOne('meta','draft');state.draft=(d&&d.value)||[];
+    await seedIfEmpty();
+    await seedAssetsIfEmpty();
+    await loadAssetPresets();
+    await populateProjects();
+    renderAssetCatTabs();
+    setView('captures');
+  }catch(err){
+    console.error('初始化失败：',err);
+    toast('初始化失败：'+((err&&err.message)||err)+'（如持续失败，可尝试关闭其他标签页或清空本站的 IndexedDB 后刷新）');
+  }
 })();
 </script>
 </body>
