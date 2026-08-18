@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17u';
+    var PAGE_VER='2026-08-17v';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -477,7 +477,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17u';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17v';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1462,6 +1462,20 @@ function parseShotNo(str){
   if(!m) return null;
   return {proj:m[1], ep:String(+m[2]).padStart(3,'0'), sc:String(+m[3]).padStart(3,'0'), sh:String(+m[4]).padStart(3,'0')};
 }
+// 项目名 → 拼音首字母（示例项目 → XLXM），依赖 pinyin-pro（window.__pinyin）。
+// 库未就绪时回退：保留字母数字，否则取前 4 字符。
+function pinyinInitials(str){
+  str=(str||'').trim();
+  if(!str) return '';
+  try{
+    if(window.__pinyin){
+      const r=window.__pinyin(str,{pattern:'first',toneType:'none',type:'array'});
+      return (Array.isArray(r)?r.join(''):String(r)).replace(/\s+/g,'').toUpperCase();
+    }
+  }catch(e){}
+  const a=str.replace(/[^a-zA-Z0-9]/g,'').toUpperCase();
+  return a||str.slice(0,4).toUpperCase();
+}
 let assetCharNames=[];
 let assetMediaUrls=[];
 function revokeAssetMedia(){assetMediaUrls.forEach(u=>URL.revokeObjectURL(u));assetMediaUrls=[];}
@@ -1871,7 +1885,7 @@ async function openAssetModal(existing, presetParent, presetData){
       <div class="field"><label>镜号（自动拼成 项目_EP集_SC场_镜，如 XXY_EP001_SC001_005）</label>
         <div class="shotno-builder" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <input id="am-shot-proj" list="am-shot-proj-list" placeholder="项目名" style="width:120px">
-          <datalist id="am-shot-proj-list">${projNames.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+          <datalist id="am-shot-proj-list">${projNames.map(p=>`<option value="${esc(pinyinInitials(p))}" title="${esc(p)}">${esc(pinyinInitials(p))}</option>`).join('')}</datalist>
           <span style="color:var(--muted)">_EP</span><select id="am-shot-ep">${snOpts}</select>
           <span style="color:var(--muted)">_SC</span><select id="am-shot-sc">${snOpts}</select>
           <span style="color:var(--muted)">_</span><select id="am-shot-sh">${snOpts}</select>
@@ -1997,7 +2011,7 @@ async function openAssetModal(existing, presetParent, presetData){
       if(spEl && sepEl && sscEl && sshEl){
         const parsed=parseShotNo(a.shotNo);
         if(parsed){ spEl.value=parsed.proj; sepEl.value=parsed.ep; sscEl.value=parsed.sc; sshEl.value=parsed.sh; }
-        else { const cp=state.assetProject?(allProjects.find(p=>p.id===state.assetProject)||{}).name||'':''; spEl.value=cp; sepEl.value='001'; sscEl.value='001'; sshEl.value='001'; }
+        else { const cp=state.assetProject?(allProjects.find(p=>p.id===state.assetProject)||{}).name||'':''; spEl.value=pinyinInitials(cp); sepEl.value='001'; sscEl.value='001'; sshEl.value='001'; }
         const upd=()=>{ if(spvEl) spvEl.textContent=(spEl.value.trim()||'?')+'_EP'+(sepEl.value||'000')+'_SC'+(sscEl.value||'000')+'_'+(sshEl.value||'000'); };
         [spEl,sepEl,sscEl,sshEl].forEach(el=>el.addEventListener('change',upd));
         spEl.addEventListener('input',upd);
@@ -2348,7 +2362,8 @@ async function openAssetModal(existing, presetParent, presetData){
         } else if(parentCategory==='chengpian'){
           a.video = video ? {blob:video.blob||null, url:video.url||null, name:video.name||''} : null;
           const spEl=document.getElementById('am-shot-proj');
-          a.shotNo = spEl ? ((spEl.value.trim()||'?')+'_EP'+document.getElementById('am-shot-ep').value+'_SC'+document.getElementById('am-shot-sc').value+'_'+document.getElementById('am-shot-sh').value) : '';
+          const spCode=pinyinInitials(spEl?spEl.value.trim():'')||'?';
+          a.shotNo = spEl ? (spCode+'_EP'+document.getElementById('am-shot-ep').value+'_SC'+document.getElementById('am-shot-sc').value+'_'+document.getElementById('am-shot-sh').value) : '';
           a.synopsis = document.getElementById('am-synopsis')?document.getElementById('am-synopsis').value.trim():'';
           a.genPrompt='';
         } else {
@@ -2917,6 +2932,13 @@ async function boot(){
   }
 }
 boot();
+</script>
+<!-- 拼音首字母库（离线可用，供镜号项目名转 XLXM）。pinyin-pro 由 jsDelivr +esm 打包 -->
+<script type="module">
+  try{
+    const mod = await import('./pinyin-pro.esm.js');
+    window.__pinyin = mod.pinyin || (mod.default && mod.default.pinyin);
+  }catch(e){ console.warn('pinyin-pro 加载失败，镜号将回退为原项目名首字符', e); }
 </script>
 </body>
 </html>
