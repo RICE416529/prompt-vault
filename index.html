@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17t';
+    var PAGE_VER='2026-08-17u';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -477,7 +477,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17t';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17u';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1456,6 +1456,12 @@ async function loadAssetPresets(){
 }
 async function saveAssetPresets(){ await putOne('meta',{id:'assetPresets',value:assetPresets}); }
 function fillDatalist(id,arr){const dl=document.getElementById(id);if(dl)dl.innerHTML=(arr||[]).map(v=>`<option value="${esc(v)}">`).join('');}
+// 镜号结构化：解析 "项目_EP集_SC场_镜" 成 {proj,ep,sc,sh}（项目名可含下划线）
+function parseShotNo(str){
+  const m=(str||'').match(/^(.*)_EP(\d+)_SC(\d+)_(\d+)$/);
+  if(!m) return null;
+  return {proj:m[1], ep:String(+m[2]).padStart(3,'0'), sc:String(+m[3]).padStart(3,'0'), sh:String(+m[4]).padStart(3,'0')};
+}
 let assetCharNames=[];
 let assetMediaUrls=[];
 function revokeAssetMedia(){assetMediaUrls.forEach(u=>URL.revokeObjectURL(u));assetMediaUrls=[];}
@@ -1798,6 +1804,10 @@ async function openAssetModal(existing, presetParent, presetData){
   // 注意：新建集也会生成 uid()，所以不能用 a.id 判断；必须用 isEdit 区分，否则 a.name='' 会
   // 命中所有父级为空的资产（即所有集），把别的集的图也拉进封面候选。
   const children = (isCollection && isEdit) ? allAssets.filter(x=>(x.parent||'')===a.name) : [];
+  // 镜号结构化构建器所需：项目名列表 + 001~999 选项
+  const allProjects = await getAll('projects');
+  const projNames = allProjects.map(p=>p.name).filter(Boolean);
+  const snOpts = (function(){ let s=''; for(let i=1;i<=999;i++){ const v=String(i).padStart(3,'0'); s+='<option value="'+v+'">'+v+'</option>'; } return s; })();
   const root=document.getElementById('modal-root');
   const paletteRowsHtml = (!isCollection && a.category==='palette') ? `<div class="field"><label>色板（7 色：类型 / HEX / 使用场景）</label><div id="pal-rows"></div><button class="btn" id="pal-add" style="margin-top:6px">＋ 加一行</button></div>` : '';
   let body;
@@ -1858,7 +1868,16 @@ async function openAssetModal(existing, presetParent, presetData){
         <div class="row"><input type="file" id="am-video" accept="video/*"><input type="text" id="am-video-url" placeholder="或粘贴视频网址…" style="flex:1"></div>
         <div class="paste-hint">复制视频后聚焦此窗口按 Ctrl+V 即可粘入。</div>
       </div>
-      <div class="field"><label>镜号（如 01 / SC12 / A03，粗剪时对齐时间线用）</label><input id="am-shotno" style="width:100%" value="${esc(a.shotNo||'')}" placeholder="镜号"></div>
+      <div class="field"><label>镜号（自动拼成 项目_EP集_SC场_镜，如 XXY_EP001_SC001_005）</label>
+        <div class="shotno-builder" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input id="am-shot-proj" list="am-shot-proj-list" placeholder="项目名" style="width:120px">
+          <datalist id="am-shot-proj-list">${projNames.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+          <span style="color:var(--muted)">_EP</span><select id="am-shot-ep">${snOpts}</select>
+          <span style="color:var(--muted)">_SC</span><select id="am-shot-sc">${snOpts}</select>
+          <span style="color:var(--muted)">_</span><select id="am-shot-sh">${snOpts}</select>
+        </div>
+        <div class="shotno-preview" style="margin-top:6px;font-size:12px">预览：<b id="am-shot-preview" style="color:var(--accent)"></b></div>
+      </div>
       <div class="field"><label>简介（这一镜讲什么）</label><textarea id="am-synopsis" placeholder="如：女主推门进入旧公寓，光线昏暗，神情警觉">${esc(a.synopsis||'')}</textarea></div>` : `
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
@@ -1875,7 +1894,7 @@ async function openAssetModal(existing, presetParent, presetData){
           <input class="add-tag" id="am-purp-add" placeholder="＋ 新增用途回车">
         </div>
       </div>
-      <div class="field"><label>${isPrompt?'适用模型（可选）':'生成工具 / 来源'}</label><input id="am-tool" list="am-tool-list" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图"><datalist id="am-tool-list"></datalist>
+      <div class="field"><label>${isPrompt?'适用模型（可选）':'生成工具 / 来源'}</label><input id="am-tool" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图">
         <div class="tag-editor">
           <span class="ed-label">💡 工具快捷输入</span>
           <div class="sug" id="am-tool-sugs"></div>
@@ -1972,6 +1991,19 @@ async function openAssetModal(existing, presetParent, presetData){
       }
     });
     try{ renderVideo(); }catch(e){console.error('video init',e);}
+    // 镜号结构化构建器：回填已有值 / 默认当前项目，实时预览
+    try{
+      const spEl=document.getElementById('am-shot-proj'), sepEl=document.getElementById('am-shot-ep'), sscEl=document.getElementById('am-shot-sc'), sshEl=document.getElementById('am-shot-sh'), spvEl=document.getElementById('am-shot-preview');
+      if(spEl && sepEl && sscEl && sshEl){
+        const parsed=parseShotNo(a.shotNo);
+        if(parsed){ spEl.value=parsed.proj; sepEl.value=parsed.ep; sscEl.value=parsed.sc; sshEl.value=parsed.sh; }
+        else { const cp=state.assetProject?(allProjects.find(p=>p.id===state.assetProject)||{}).name||'':''; spEl.value=cp; sepEl.value='001'; sscEl.value='001'; sshEl.value='001'; }
+        const upd=()=>{ if(spvEl) spvEl.textContent=(spEl.value.trim()||'?')+'_EP'+(sepEl.value||'000')+'_SC'+(sscEl.value||'000')+'_'+(sshEl.value||'000'); };
+        [spEl,sepEl,sscEl,sshEl].forEach(el=>el.addEventListener('change',upd));
+        spEl.addEventListener('input',upd);
+        upd();
+      }
+    }catch(e){ console.error('shotno init',e); }
   }
   try{ renderImages(); }catch(e){console.error('images init',e);}
   try{ renderCoverPicker(); }catch(e){console.error('cover picker',e);}
@@ -2211,7 +2243,6 @@ async function openAssetModal(existing, presetParent, presetData){
   }
   function refreshSuggestions(){
     const cat=getCat();
-    fillDatalist('am-tool-list',assetPresets.tools);
     fillDatalist('am-name-list',assetPresets.names[cat]||[]);
     // 子类型预选项：子资产与编辑现有集绝对以当前所属集为准（集间互不干扰）。
     // 只有创建新集时才退化为全局默认同类为初始候选（一次性，不会回写全局）。
@@ -2316,7 +2347,8 @@ async function openAssetModal(existing, presetParent, presetData){
           a.genPrompt=document.getElementById('am-gen').value.trim();
         } else if(parentCategory==='chengpian'){
           a.video = video ? {blob:video.blob||null, url:video.url||null, name:video.name||''} : null;
-          a.shotNo = document.getElementById('am-shotno')?document.getElementById('am-shotno').value.trim():'';
+          const spEl=document.getElementById('am-shot-proj');
+          a.shotNo = spEl ? ((spEl.value.trim()||'?')+'_EP'+document.getElementById('am-shot-ep').value+'_SC'+document.getElementById('am-shot-sc').value+'_'+document.getElementById('am-shot-sh').value) : '';
           a.synopsis = document.getElementById('am-synopsis')?document.getElementById('am-synopsis').value.trim():'';
           a.genPrompt='';
         } else {
