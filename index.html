@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17s';
+    var PAGE_VER='2026-08-17t';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -427,6 +427,9 @@
       <button class="btn" id="asset-presets" title="已下线：每个字段自带 chip 快捷输入" style="display:none">⚙ 预选项</button>
       <button class="btn primary" id="asset-add">＋ 新建资产</button>
       <button class="btn" id="asset-export">📤 导出 Briefing</button>
+      <button class="btn" id="asset-backup" title="导出整库 JSON（含图片/视频），用于 U 盘备份">📦 完整备份</button>
+      <button class="btn" id="asset-restore" title="从 JSON 导入，按 id 并集去重合并（不覆盖、不重复）">📥 导入合并</button>
+      <input type="file" id="asset-restore-file" accept="application/json" hidden>
     </div>
     <div class="cat-tabs" id="asset-cat-tabs" style="margin-bottom:14px"></div>
     <div class="toolbar" style="margin-bottom:14px">
@@ -474,7 +477,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17s';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17t';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1354,7 +1357,8 @@ const DEFAULT_ASSET_CATS = [
   {id:'character', name:'人物', icon:'🧑', parent:'', hint:'角色身份资产：四视图 / 双头像+服装正背面'},
   {id:'scene', name:'场景', icon:'🏞', parent:'', hint:'场景资产：全景 / 中景 / 细节'},
   {id:'palette', name:'色板', icon:'🎨', parent:'', hint:'色板资产：7色块 / 类型 / HEX / 使用场景'},
-  {id:'prompt', name:'提示词', icon:'📝', parent:'', hint:'提示词资产：文本提示词，可从拼装台导入 / 手写 / 粘贴'}
+  {id:'prompt', name:'提示词', icon:'📝', parent:'', hint:'提示词资产：文本提示词，可从拼装台导入 / 手写 / 粘贴'},
+  {id:'chengpian', name:'成片', icon:'🎬', parent:'', hint:'成片视频：用资产创作的短片，可标注镜号与简介，后续可做粗剪'}
 ];
 let ASSET_CATS = JSON.parse(JSON.stringify(DEFAULT_ASSET_CATS));
 async function loadAssetCats(){
@@ -1362,6 +1366,11 @@ async function loadAssetCats(){
     const d=await getOne('meta','assetCats');
     if(d && Array.isArray(d.value) && d.value.length){ ASSET_CATS=d.value; }
   }catch(e){ console.warn('loadAssetCats failed',e); }
+  // 迁移：确保内置「成片」分类存在（老用户从 meta 读到的列表可能没有）
+  if(!ASSET_CATS.some(c=>c.id==='chengpian')){
+    const def=DEFAULT_ASSET_CATS.find(c=>c.id==='chengpian');
+    if(def){ ASSET_CATS.push(JSON.parse(JSON.stringify(def))); try{ await saveAssetCats(); }catch(_){} }
+  }
 }
 async function saveAssetCats(){ await putOne('meta',{id:'assetCats',value:ASSET_CATS}); }
 const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
@@ -1371,6 +1380,10 @@ const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
 function collectionCover(name, assets){
   const root=assets.find(a=>a.name===name && !a.parent); if(!root) return '';
   const mku=im=>{ if(!im) return ''; const u=im.blob?URL.createObjectURL(im.blob):(im.url||''); if(u) assetMediaUrls.push(u); return u; };
+  if(root.category==='chengpian'){
+    const child=assets.find(a=>(a.parent||'')===name && a.video);
+    if(child) return mku(child.video);
+  }
   if(root.cover) return mku(root.cover);
   if(root.images&&root.images.length) return mku(root.images[0]);
   // 色板集：与「内部显示」联动——若第一个子资产切到了「图片」模式，外面封面就用它的图片；
@@ -1500,6 +1513,11 @@ function renderAssetCatTabs(){
 }
 /* 缩略图：集封面 / 画板卡片通用 */
 function assetThumbHtml(a){
+  // 成片资产：有视频则显示带播放标的视频缩略图
+  if(a.category==='chengpian'){
+    if(a.video){ const im=a.video; const u=im.blob?URL.createObjectURL(im.blob):(im.url||''); if(u){ assetMediaUrls.push(u); return `<div class="m-thumb" style="position:relative;overflow:hidden"><video src="${u}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;text-shadow:0 0 6px #000;pointer-events:none">▶</div></div>`; } }
+    return `<div class="m-thumb"><div class="ph">🎬 成片</div></div>`;
+  }
   // 提示词资产：根（集）无图时显示「黑底白字 + 集名」封面；子资产显示文本预览
   if(a.category==='prompt'){
     if(!a.parent){
@@ -1592,6 +1610,10 @@ function moodRowBodyHtml(a, opts){
     const cols=(a.detail&&a.detail.colors||[]);
     const strip=cols.length?cols.map(c=>`<span style="flex:1;height:100%;background:${esc(c.hex)}"></span>`).join(''):'<span class="ph">无色板</span>';
     thumb = `<div class="row-thumb" style="padding:0"><div style="display:flex;gap:2px;width:100%;height:100%">${strip}</div></div>`;
+  } else if(a.category==='chengpian' && a.video){
+    const im=a.video; const u=im.blob?URL.createObjectURL(im.blob):im.url;
+    if(u){ assetMediaUrls.push(u); thumb=`<div class="row-thumb" style="position:relative;overflow:hidden"><video src="${u}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;text-shadow:0 0 5px #000;pointer-events:none">▶</div></div>`; }
+    else thumb=`<div class="row-thumb"><span class="ph">成片</span></div>`;
   } else if(a.images && a.images.length){
     const im=a.images[0]; const u=im.blob?URL.createObjectURL(im.blob):im.url;
     if(u){ assetMediaUrls.push(u); thumb = `<div class="row-thumb"><img src="${u}" alt=""></div>`; }
@@ -1612,6 +1634,11 @@ function moodRowBodyHtml(a, opts){
       : `<div class="row-zh" style="opacity:.55">(空白)</div>`;
     body = `<div class="row-line2">${trHtml}${zhHtml}</div>`;
   
+  } else if(a.category==='chengpian'){
+    const shot=a.shotNo?`<b style="color:var(--accent)">镜号 ${esc(a.shotNo)}</b> `:'';
+    const syn=a.synopsis?`<span title="${esc(a.synopsis)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55ch;display:inline-block;vertical-align:bottom">${esc(a.synopsis)}</span>`:'';
+    const tagline=(a.tags&&a.tags.length)?a.tags.map(t=>{const c=chipDecoColor(t);return `<span style="font-size:10px;padding:1px 7px;border-radius:9px;background:${c.bg};border:1px solid ${c.bd};color:${c.fg}">${esc(t)}</span>`;}).join(' '):'';
+    body=`<div class="row-line2"><div class="row-zh">${shot}${syn||'<span style="opacity:.55">（未填镜号/简介）</span>'}</div></div>${tagline?`<div class="row-line3">${tagline}</div>`:''}`;
   } else {
     const purpose=a.purpose?`<span title="${esc(a.purpose)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60ch;display:inline-block">${esc(a.purpose)}</span>`:'';
     const tagline=(a.tags&&a.tags.length)?a.tags.map(t=>{const c=chipDecoColor(t);return `<span style="font-size:10px;padding:1px 7px;border-radius:9px;background:${c.bg};border:1px solid ${c.bd};color:${c.fg}">${esc(t)}</span>`;}).join(' '):'';
@@ -1825,7 +1852,14 @@ async function openAssetModal(existing, presetParent, presetData){
       <div class="field"><label>📝 提示词内容 <small style="color:var(--accent)">（主体，必填）</small></label>
         <textarea id="am-gen" style="min-height:240px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;background:var(--bg2);border:1px solid var(--accent);border-radius:8px;padding:10px" placeholder="直接粘贴提示词，或从拼装台导出后保存到这里">${esc(a.genPrompt)}</textarea>
         <div class="paste-hint">支持手写、粘贴、从拼装台导出（拼装台有「💾 存到提示词库」按钮）。保存后会自动中英互译。</div>
-      </div>` : `
+      </div>` : (parentCategory==='chengpian' ? `
+      <div class="field"><label>成片视频（上传 / 直接粘贴）</label>
+        <div id="am-video-preview" class="thumb" style="height:180px;margin-bottom:8px"><div class="ph">未选择视频</div></div>
+        <div class="row"><input type="file" id="am-video" accept="video/*"><input type="text" id="am-video-url" placeholder="或粘贴视频网址…" style="flex:1"></div>
+        <div class="paste-hint">复制视频后聚焦此窗口按 Ctrl+V 即可粘入。</div>
+      </div>
+      <div class="field"><label>镜号（如 01 / SC12 / A03，粗剪时对齐时间线用）</label><input id="am-shotno" style="width:100%" value="${esc(a.shotNo||'')}" placeholder="镜号"></div>
+      <div class="field"><label>简介（这一镜讲什么）</label><textarea id="am-synopsis" placeholder="如：女主推门进入旧公寓，光线昏暗，神情警觉">${esc(a.synopsis||'')}</textarea></div>` : `
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
         <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
@@ -1833,7 +1867,7 @@ async function openAssetModal(existing, presetParent, presetData){
       </div>
       <div class="field"><label>生成提示词（可选，方便复现）</label>
         <textarea id="am-gen" placeholder="当时用的提示词…">${esc(a.genPrompt)}</textarea>
-      </div>`}
+      </div>`)}
       <div class="field"><label>用途说明（这个资产是干什么的）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
         <div class="tag-editor">
           <span class="ed-label">💡 用途说明快捷输入</span>
@@ -1915,10 +1949,29 @@ async function openAssetModal(existing, presetParent, presetData){
     });
   }
   function addImg(blob,url){ images.push(url?{blob:null,url,caption:''}:{blob,url:null,caption:''}); renderImages(); }
+  // 视频（成片）：存 blob + 名称
+  let video=a.video||null;
+  const vidBox=document.getElementById('am-video-preview');
+  function renderVideo(){
+    if(!vidBox) return;
+    const u=video?(video.blob?URL.createObjectURL(video.blob):(video.url||'')):'';
+    if(u){ if(video&&video.blob) assetMediaUrls.push(u); vidBox.innerHTML=`<video src="${u}" controls muted style="max-height:170px;max-width:100%"></video><div style="margin-top:4px"><button class="btn" id="am-video-del">移除视频</button></div>`;
+      const del=document.getElementById('am-video-del'); if(del) del.addEventListener('click',()=>{video=null;renderVideo();});
+    } else vidBox.innerHTML='<div class="ph">未选择视频</div>';
+  }
+  function addVideo(f){ video={blob:f,name:f.name}; renderVideo(); }
   if(!isCollection){
     const amf=document.getElementById('am-file'); if(amf) amf.addEventListener('change',e=>{[...e.target.files].forEach(f=>addImg(f)); e.target.value='';});
     const amu=document.getElementById('am-url'); if(amu) amu.addEventListener('change',e=>{const u=e.target.value.trim();if(u)addImg(null,u);});
-    overlay.addEventListener('paste',e=>{for(const it of (e.clipboardData.items||[])){if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){addImg(f);toast('已粘贴图片');}break;}}});
+    const amv=document.getElementById('am-video'); if(amv) amv.addEventListener('change',e=>{const f=e.target.files[0];if(f){addVideo(f);e.target.value='';}});
+    const amvu=document.getElementById('am-video-url'); if(amvu) amvu.addEventListener('change',e=>{const u=e.target.value.trim();if(u){video={blob:null,url:u,name:''};renderVideo();}});
+    overlay.addEventListener('paste',e=>{
+      for(const it of (e.clipboardData.items||[])){
+        if(it.type.startsWith('image/')){const f=it.getAsFile();if(f){addImg(f);toast('已粘贴图片');}break;}
+        else if(it.type.startsWith('video/')){const f=it.getAsFile();if(f){addVideo(f);toast('已粘贴视频');}break;}
+      }
+    });
+    try{ renderVideo(); }catch(e){console.error('video init',e);}
   }
   try{ renderImages(); }catch(e){console.error('images init',e);}
   try{ renderCoverPicker(); }catch(e){console.error('cover picker',e);}
@@ -2259,7 +2312,16 @@ async function openAssetModal(existing, presetParent, presetData){
         a.subType=document.getElementById('am-subtype')?document.getElementById('am-subtype').value.trim():'';
         a.parent=a.parent; // 自动归属当前集
         a.tool=document.getElementById('am-tool').value.trim();
-        a.genPrompt=document.getElementById('am-gen').value.trim();
+        if(parentCategory==='prompt'){
+          a.genPrompt=document.getElementById('am-gen').value.trim();
+        } else if(parentCategory==='chengpian'){
+          a.video = video ? {blob:video.blob||null, url:video.url||null, name:video.name||''} : null;
+          a.shotNo = document.getElementById('am-shotno')?document.getElementById('am-shotno').value.trim():'';
+          a.synopsis = document.getElementById('am-synopsis')?document.getElementById('am-synopsis').value.trim():'';
+          a.genPrompt='';
+        } else {
+          a.genPrompt=document.getElementById('am-gen').value.trim();
+        }
         a.callout=document.getElementById('am-callout').value.trim();
         if(parentCategory==='expression'){a.detail.list=document.getElementById('am-expr-list')?document.getElementById('am-expr-list').value.trim():a.detail.list;}
         if(parentCategory==='scene'){a.detail.layout=document.getElementById('am-layout')?document.getElementById('am-layout').value.trim():a.detail.layout;}
@@ -2327,6 +2389,9 @@ async function openExportBriefing(){
         md+=`  - 色板：`+a.detail.colors.map(c=>`${c.type} ${c.hex}（${c.usage||''}）`).join('；')+`\n`;
       }
       if(a.callout) md+=`  - 调用标注：${a.callout}\n`;
+      if(a.category==='chengpian'){
+        list.filter(x=>x.parent===a.name).forEach(k=>{ md+=`  - ${k.shotNo?('['+k.shotNo+'] '):''}${k.name||'(未命名)'}${k.synopsis?('：'+k.synopsis):''}\n`; });
+      }
       md+='\n';
     }
   }
@@ -2497,33 +2562,54 @@ async function openAssetView(id){
     // 提示词资产：文字为主，stage 显示完整内容
     const txt=a.genPrompt||'（暂无内容）';
     stageHtml=`<div class="av-stage" style="padding:20px;background:var(--bg2);align-items:flex-start;justify-content:flex-start;overflow-y:auto"><div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.75;color:var(--text);white-space:pre-wrap;text-align:left;width:100%">${esc(txt)}</div></div>`;
+  } else if(a.video){
+    const u=a.video.blob?URL.createObjectURL(a.video.blob):(a.video.url||'');
+    if(u){ assetMediaUrls.push(u); stageHtml=`<div class="av-stage"><video id="av-big" src="${u}" controls style="max-width:100%;max-height:60vh"></video></div>`; }
+    else stageHtml=`<div class="av-stage" style="color:#666;align-items:center">（没有视频）</div>`;
   } else {
     stageHtml = imgs.length?`<div class="av-stage"><img id="av-big" src="${firstU}" alt=""></div>`:`<div class="av-stage" style="color:#666;align-items:center">（该资产没有图片）</div>`;
   }
   const showThumbs = !isCol && imgs.length>1 && (a.category!=='palette' || (a.thumbMode||'palette')==='image');
   const thumbsHtml = showThumbs ? `<div class="av-thumbs">${imgs.map((im,i)=>`<img data-i="${i}" class="${i===0?'on':''}" src="${uOf(im)}">`).join('')}</div>` : '';
   const isPromptAsset=!isCol && a.category==='prompt';
-  const info = isCol ? [
-    ['名称', a.name||'(未命名)'],
-    ['集类型', assetCatName(a.category)],
-    ['用途说明', a.purpose||'（未填）'],
-    ['集设定 / 备注', (a.detail&&a.detail.notes)||'（未填）'],
-  ] : (isPromptAsset ? [
-    ['名称', a.name||'(未命名)'],
-    ['类型', assetCatName(a.category)],
-    ['子类型', a.subType||'—'],
-    ['所属集', a.parent||'—'],
-    ['用途说明', a.purpose||'（未填）'],
-    ['适用模型', a.tool||'（未填）'],
-  ] : [
-    ['名称', a.name||'(未命名)'],
-    ['类型', assetCatName(a.category)],
-    ['子类型', a.subType||'—'],
-    ['所属集', a.parent||'—'],
-    ['用途说明', a.purpose||'（未填）'],
-    ['生成工具', a.tool||'（未填）'],
-    ['生成提示词', a.genPrompt||'（未填）'],
-  ]);
+  let info;
+  if(isCol){
+    info = [
+      ['名称', a.name||'(未命名)'],
+      ['集类型', assetCatName(a.category)],
+      ['用途说明', a.purpose||'（未填）'],
+      ['集设定 / 备注', (a.detail&&a.detail.notes)||'（未填）'],
+    ];
+  } else if(isPromptAsset){
+    info = [
+      ['名称', a.name||'(未命名)'],
+      ['类型', assetCatName(a.category)],
+      ['子类型', a.subType||'—'],
+      ['所属集', a.parent||'—'],
+      ['用途说明', a.purpose||'（未填）'],
+      ['适用模型', a.tool||'（未填）'],
+    ];
+  } else if(a.category==='chengpian'){
+    info = [
+      ['名称', a.name||'(未命名)'],
+      ['类型', '成片'],
+      ['镜号', a.shotNo||'—'],
+      ['简介', a.synopsis||'（未填）'],
+      ['所属集', a.parent||'—'],
+      ['用途说明', a.purpose||'（未填）'],
+      ['来源', a.tool||'（未填）'],
+    ];
+  } else {
+    info = [
+      ['名称', a.name||'(未命名)'],
+      ['类型', assetCatName(a.category)],
+      ['子类型', a.subType||'—'],
+      ['所属集', a.parent||'—'],
+      ['用途说明', a.purpose||'（未填）'],
+      ['生成工具', a.tool||'（未填）'],
+      ['生成提示词', a.genPrompt||'（未填）'],
+    ];
+  }
   root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(880px,100%);max-height:92vh;display:flex;flex-direction:column">
     <h3>${esc(a.name||'资产')} <small>${assetCatName(a.category)}</small></h3>
     <div class="mtab" style="overflow-y:auto;padding-right:6px">
@@ -2583,6 +2669,115 @@ document.getElementById('asset-del-project').addEventListener('click',async()=>{
   state.assetProject='';
   await populateProjects(); renderAssets();
   toast('已删除项目「'+(p.name||'未命名')+'」及其 '+totalCount+' 个资产');
+});
+/* ============ 整库备份 / 导入合并（按 id 并集去重） ============ */
+// 导出：把对象里的 Blob 递归转成 dataUrl，便于塞进单个 JSON
+async function blobFieldsToDataUrl(v){
+  if(v instanceof Blob) return await blobToDataURL(v);
+  if(Array.isArray(v)) return await Promise.all(v.map(blobFieldsToDataUrl));
+  if(v && typeof v==='object'){
+    const out={};
+    for(const k of Object.keys(v)){
+      const val=v[k];
+      if(val instanceof Blob) out[k]=await blobToDataURL(val);
+      else if(val && typeof val==='object') out[k]=await blobFieldsToDataUrl(val);
+      else out[k]=val;
+    }
+    return out;
+  }
+  return v;
+}
+// 导入：把 dataUrl 递归还原成 Blob（video / images 等）
+async function reviveDataUrls(v){
+  if(v && typeof v==='object'){
+    if(Array.isArray(v)) return await Promise.all(v.map(reviveDataUrls));
+    const out={};
+    for(const k of Object.keys(v)){
+      const val=v[k];
+      if(k==='dataUrl' && typeof val==='string' && val.startsWith('data:')){
+        out.blob=await dataURLToBlob(val);
+      } else if(val && typeof val==='object'){
+        out[k]=await reviveDataUrls(val);
+      } else out[k]=val;
+    }
+    return out;
+  }
+  return v;
+}
+// 按 id 并集合并：相同 id 跳过（保留现有、不覆盖），新 id 追加
+async function mergeStoreById(name, incoming){
+  const existing=await getAll(name);
+  const exIds=new Set(existing.map(x=>x.id));
+  let added=0,skipped=0;
+  for(const item of incoming||[]){
+    if(!item || item.id===undefined || item.id===null) continue;
+    if(exIds.has(item.id)){ skipped++; continue; }
+    await putOne(name, await reviveDataUrls(item));
+    added++;
+  }
+  return {added,skipped};
+}
+function deepMergePresets(a,b){
+  if(Array.isArray(b)) return [...new Set([...(Array.isArray(a)?a:[]), ...b])];
+  const out=(a&&typeof a==='object')?{...a}:{};
+  for(const k of Object.keys(b||{})){
+    const bv=b[k];
+    if(Array.isArray(bv)){
+      const av=Array.isArray(out[k])?out[k]:[];
+      out[k]=[...new Set([...av, ...bv])];
+    } else if(bv && typeof bv==='object' && !Array.isArray(bv)){
+      out[k]=deepMergePresets(out[k]||{}, bv);
+    } else out[k]=bv;
+  }
+  return out;
+}
+async function mergeMetaStores(metaIn){
+  for(const [key,val] of Object.entries(metaIn||{})){
+    if(key==='assetCats'){
+      const ex=(await getOne('meta',key))?.value||[];
+      const byId=new Map();
+      [...ex, ...(Array.isArray(val)?val:[])].forEach(c=>{ if(c&&c.id) byId.set(c.id,c); });
+      await putOne('meta',{id:key,value:[...byId.values()]});
+    } else if(key==='assetPresets'){
+      const ex=(await getOne('meta',key))?.value||{};
+      await putOne('meta',{id:key,value:deepMergePresets(ex, val||{})});
+    } else {
+      await putOne('meta',{id:key,value:val});
+    }
+  }
+  await loadAssetCats(); await loadAssetPresets();
+}
+document.getElementById('asset-backup').addEventListener('click',async()=>{
+  try{
+    const stores=['captures','blocks','meta','assets','projects'];
+    const dump={app:'prompt-vault',version:APP_VER,exportedAt:Date.now(),stores:{}};
+    for(const s of stores){
+      const rows=await getAll(s);
+      dump.stores[s]= await Promise.all(rows.map(async r=> await blobFieldsToDataUrl(r)));
+    }
+    const blob=new Blob([JSON.stringify(dump)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vault-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+    toast('已导出整库备份 ✓');
+  }catch(e){ console.error(e); toast('导出失败：'+(e&&e.message||e)); }
+});
+document.getElementById('asset-restore').addEventListener('click',()=>document.getElementById('asset-restore-file').click());
+document.getElementById('asset-restore-file').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  e.target.value='';
+  if(!confirm('导入将与现有数据「按 id 并集去重合并」：\n· 相同 id 的保留现有、不覆盖；\n· 新的 id 追加；\n· 不会删除你已有的任何资产。\n（例如：家/公司各增资产，合并后两边都会是全集）\n确定继续？')) return;
+  try{
+    const data=JSON.parse(await f.text());
+    const stores=data.stores||{};
+    let totalAdded=0,totalSkip=0;
+    for(const s of ['captures','blocks','assets','projects']){
+      if(!stores[s]) continue;
+      const {added,skipped}=await mergeStoreById(s, stores[s]);
+      totalAdded+=added; totalSkip+=skipped;
+    }
+    if(stores.meta) await mergeMetaStores(stores.meta);
+    toast(`导入完成 ✓ 新增 ${totalAdded} 条，已有跳过 ${totalSkip} 条（去重）`);
+    renderAssets(); populateProjects(); populateAssetParents();
+  }catch(e){ console.error(e); toast('导入失败：'+(e&&e.message||e)); }
 });
 document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';state.assetCollection='';populateAssetParents();renderAssets();});
 document.getElementById('asset-parent').addEventListener('change',e=>{state.assetParent=e.target.value;renderAssets();});
