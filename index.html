@@ -13,12 +13,19 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17v';
+    var PAGE_VER='2026-08-17w';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
         var v=(t||'').trim();
-        if(v && v!==PAGE_VER){ location.replace(location.pathname+'?_='+Date.now()); }
+        if(v && v!==PAGE_VER){
+          var c=parseInt(sessionStorage.getItem('vaultRc')||'0',10);
+          if(c>=4){ console.warn('[VaultStudio] 自动更新重试多次仍不一致，已停止刷新避免死循环'); return; }
+          sessionStorage.setItem('vaultRc', String(c+1));
+          location.replace(location.pathname+'?_='+Date.now());
+        } else {
+          sessionStorage.removeItem('vaultRc');
+        }
       }).catch(function(){});
     }
     setTimeout(check, 1000);
@@ -477,7 +484,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17v';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17w';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
