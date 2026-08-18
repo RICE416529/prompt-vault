@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17m';
+    var PAGE_VER='2026-08-17n';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -236,15 +236,32 @@
   .m-body .actions .btn{padding:3px 9px;font-size:11px}
   .badge.set{background:#10221c;border-color:#3fae8e;color:#5fe3b6}
   .badge.sub{background:#1c1430;border-color:#7c5cff;color:#b9a6ff}
-  /* 横条卡（提示词集等） */
-  .mood-card.wide{flex-direction:row;align-items:stretch}
-  .mood-card.wide .m-thumb{height:auto;width:280px;flex:0 0 280px;max-height:140px}
-  .mood-card.wide .m-body{padding:10px 14px}
-  .mood-card.wide .m-name{font-size:14px}
-  /* 拖拽 */
-  .mood-card[draggable="true"]{cursor:grab}
-  .mood-card.dragging{opacity:.35;transform:scale(.98)}
-  .mood-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+  /* 列表行（集内视图：每个子资产一行） */
+  .list-grid{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+  .asset-row{display:flex;align-items:stretch;background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:grab;transition:border-color .15s,transform .1s}
+  .asset-row:hover{border-color:var(--accent)}
+  .asset-row[draggable="true"]{user-select:none}
+  .asset-row.dragging{opacity:.35;transform:scale(.99)}
+  .asset-row.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+  .row-bar{width:6px;flex:0 0 6px;background:var(--muted);flex-shrink:0}
+  .row-thumb{width:96px;flex:0 0 96px;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;align-self:stretch}
+  .row-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .row-thumb .ph{color:#555;font-size:11px}
+  .row-thumb .prompt-preview{width:100%;height:100%;padding:8px;background:var(--bg2);overflow:hidden;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.4;color:var(--text);display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical}
+  .row-thumb.prompt{background:var(--bg2);padding:0}
+  .row-body{flex:1;min-width:0;padding:9px 12px;display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden}
+  .row-line1{display:flex;align-items:center;gap:8px;min-width:0}
+  .row-line1 .row-name{font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  .row-line2{display:flex;flex-direction:column;gap:2px;font-size:11.5px;line-height:1.4;color:var(--muted);min-width:0}
+  .row-line2 .row-en{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row-line2 .row-zh{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row-line2 .row-tr-warn{font-size:11px;color:var(--accent2);font-style:italic}
+  .row-line3{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:10.5px;color:var(--muted)}
+  .row-actions{padding:8px 10px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;flex:0 0 auto;border-left:1px dashed var(--border)}
+  .row-actions .btn{padding:3px 10px;font-size:11px;min-width:54px}
+  .empty-row{text-align:center;color:var(--muted);padding:30px;border:1px dashed var(--border);border-radius:10px}
+  /* 旧版 mood-card/wide 与拖拽样式不再用（保留旧的 compatibility 行，但只画 .asset-row 样式） */
+  /* 旧 .mood-card.wide 等不再使用 — 见 .asset-row */
   /* 小类导航条 */
   .subtype-nav{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 4px;margin-bottom:12px;border-bottom:1px dashed var(--border)}
   .subtype-nav .nav-title{font-size:12px;color:var(--muted);margin-right:4px}
@@ -406,7 +423,7 @@
       <select id="asset-parent" hidden><option value="">全部角色</option></select>
       <div class="spacer"></div>
       <button class="btn" id="asset-cats-edit" title="管理顶部 tab 上的集分类（增/改/删/排序）">🗂 分类</button>
-      <button class="btn" id="asset-presets" title="管理新建资产时的输入建议">⚙ 预选项</button>
+      <button class="btn" id="asset-presets" title="已下线：每个字段自带 chip 快捷输入" style="display:none">⚙ 预选项</button>
       <button class="btn primary" id="asset-add">＋ 新建资产</button>
       <button class="btn" id="asset-export">📤 导出 Briefing</button>
     </div>
@@ -456,7 +473,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17m';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17n';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1484,7 +1501,13 @@ function assetThumbHtml(a){
   }
   return `<div class="m-thumb"><div class="ph">无图</div></div>`;
 }
-/* 集头部大图（展示视图用）；coverUrl 优先（自动/显式封面） */
+/* chip 装饰色（仅好看，与语义无关）；同一文本每次得到稳定 hash 色 */
+function chipDecoColor(text){
+  let h=0; for(let i=0;i<(text||'').length;i++) h=(h*31+text.charCodeAt(i))&0xffff;
+  const hue=h%360;
+  return { bg:'hsl('+hue+', 30%, 22%)', bd:'hsl('+hue+', 45%, 38%)', fg:'hsl('+hue+', 55%, 78%)', dot:'hsl('+hue+', 60%, 65%)' };
+}
+/* 集内视图的列表行：一行一个子资产，左色条 + 缩略图 + 双语行 + 操作 */
 function assetHeadImg(a, coverUrl){
   let u=coverUrl||'';
   if(!u && a && a.images && a.images.length){const im=a.images[0];u=im.blob?URL.createObjectURL(im.blob):(im.url||'');if(u)assetMediaUrls.push(u);}
@@ -1516,7 +1539,7 @@ function subTypeColor(name){
   const hue=h%360;
   return 'hsl('+hue+', 65%, 60%)';
 }
-function moodCardHtml(a, opts){
+function moodRowHtml(a, opts){
   opts=opts||{};
   const inCollection=!!opts.inCollection; // 在集内视图时，隐藏大类/所属集标签
   const subColor=a.subType?subTypeColor(a.subType):'var(--muted)';
@@ -1528,18 +1551,60 @@ function moodCardHtml(a, opts){
   const canToggle = a.category==='palette' && a.images && a.images.length;
   const toggle = canToggle ? `<button class="thumb-toggle" data-toggle="${a.id}" title="切换 色板 / 图片 封面">${(a.thumbMode||'palette')==='image'?'🎨 色板':'🖼️ 图片'}</button>` : '';
   // 提示词集（父级是 prompt）的子资产：横条布局
-  const wide = inCollection && (function(){ const pcol=(opts.parentCategory||''); return pcol==='prompt'; })();
-  return `<div class="mood-card ${wide?'wide':''}" data-aid="${a.id}" draggable="${inCollection?'true':'false'}">
-    <div style="position:relative">
-      ${assetThumbHtml(a)}
-      ${toggle}
-    </div>
-    <div class="m-body">
-      <div class="m-badges">${badges}</div>
-      <div class="m-name">${esc(a.name||'(未命名)')}</div>
-      ${inCollection && a.category==='prompt' ? `<div style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.4;max-height:36px;overflow:hidden">${a.genPromptTr?`<span style="color:var(--accent2);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;display:block;margin-bottom:2px">${esc((a.genPromptTr||'').slice(0,80))}${(a.genPromptTr||'').length>80?'…':''}</span>`:''}<span style="font-family:ui-monospace,Menlo,Consolas,monospace\">${esc((a.genPrompt||'').slice(0,80))}${(a.genPrompt||'').length>80?'…':''}</span></div>` : ''}
-    </div></div>`;
+  return moodRowBodyHtml(a, opts);
+
 }
+function moodRowBodyHtml(a, opts){
+  opts=opts||{};
+  const inCollection=!!opts.inCollection;
+  const subColor=a.subType?subTypeColor(a.subType):'var(--muted)';
+  const barCol=a.subType?subColor:'#3a3a44';
+  const subBadge = a.subType?`<span class="badge subtype" style="color:${subColor};border-color:${subColor}">${esc(a.subType)}</span>`:'';
+  // 缩略图（按品类差异）
+  let thumb;
+  if(a.category==='prompt' && a.parent){
+    const txt=a.genPrompt||'';
+    thumb = txt
+      ? `<div class="row-thumb prompt"><div class="prompt-preview">${esc(txt.slice(0,120))}${txt.length>120?'\u2026':''}</div></div>`
+      : `<div class="row-thumb"><span class="ph">暂无内容</span></div>`;
+  } else if(a.category==='palette' && (a.thumbMode||'palette')!=='image'){
+    const cols=(a.detail&&a.detail.colors||[]);
+    const strip=cols.length?cols.map(c=>`<span style="flex:1;height:100%;background:${esc(c.hex)}"></span>`).join(''):'<span class="ph">无色板</span>';
+    thumb = `<div class="row-thumb" style="padding:0"><div style="display:flex;gap:2px;width:100%;height:100%">${strip}</div></div>`;
+  } else if(a.images && a.images.length){
+    const im=a.images[0]; const u=im.blob?URL.createObjectURL(im.blob):im.url;
+    if(u){ assetMediaUrls.push(u); thumb = `<div class="row-thumb"><img src="${u}" alt=""></div>`; }
+    else thumb = `<div class="row-thumb"><span class="ph">无图</span></div>`;
+  } else {
+    thumb = `<div class="row-thumb"><span class="ph">无图</span></div>`;
+  }
+  const isPrompt=a.category==='prompt';
+  let body;
+  if(isPrompt){
+    const hasTr=!!a.genPromptTr;
+    const trHtml = hasTr
+      ? `<div class="row-en" title="${esc(a.genPromptTr)}">${esc((a.genPromptTr||'').slice(0,80))}${(a.genPromptTr||'').length>80?'\u2026':''}</div>`
+      : (a.genPromptLang ? `<div class="row-tr-warn">翻译中…</div>` : '');
+    body = `<div class="row-line2">${trHtml}<div class="row-zh" title="${esc(a.genPrompt)}">${esc((a.genPrompt||'(空白)').slice(0,80))}${(a.genPrompt||'').length>80?'\u2026':''}</div></div>`;
+  } else {
+    const purpose=a.purpose?`<span title="${esc(a.purpose)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60ch;display:inline-block">${esc(a.purpose)}</span>`:'';
+    const tagline=(a.tags&&a.tags.length)?a.tags.map(t=>{const c=chipDecoColor(t);return `<span style="font-size:10px;padding:1px 7px;border-radius:9px;background:${c.bg};border:1px solid ${c.bd};color:${c.fg}">${esc(t)}</span>`;}).join(' '):'';
+    body = `<div class="row-line2"><div class="row-zh">${purpose||'<span style="opacity:.55">（未填用途）</span>'}</div></div>${tagline?`<div class="row-line3">${tagline}</div>`:''}`;
+  }
+  return `<div class="asset-row" data-aid="${a.id}" draggable="${inCollection?'true':'false'}">
+    <span class="row-bar" style="background:${barCol}"></span>
+    ${thumb}
+    <div class="row-body">
+      <div class="row-line1">${subBadge}<span class="row-name" title="${esc(a.name||'(未命名)')}">${esc(a.name||'(未命名)')}</span></div>
+      ${body}
+    </div>
+    <div class="row-actions">
+      <button class="btn" data-act="view" data-id="${a.id}">查看</button>
+      <button class="btn danger" data-act="del" data-id="${a.id}">删除</button>
+    </div>
+  </div>`;
+}
+
 async function renderAssets(){
   revokeAssetMedia();
   const grid=document.getElementById('asset-grid');
@@ -1584,7 +1649,7 @@ async function renderAssets(){
     if(!children.length){
       html+=`<div class="empty">这个集里还没有子资产。点「＋ 新建资产」，它会自动归入「${esc(state.assetCollection)}」。</div>`;
     } else {
-      html+=`<div class="grid mood-grid" id="mood-grid">${children.map(a=>moodCardHtml(a,{inCollection:true,parentCategory})).join('')}</div>`;
+      html+=`<div class="list-grid" id="mood-grid">${children.map(a=>moodRowHtml(a,{inCollection:true,parentCategory})).join('')}</div>`;
     }
     grid.className='';
     grid.innerHTML=html;
@@ -1614,10 +1679,10 @@ async function renderAssets(){
   grid.className='grid mood-grid';
   grid.innerHTML=roots.map(a=>collectionCardHtml(a,childCount, collectionCover(a.name, assets))).join('');
 }
-/* HTML5 拖拽排序：把 mood-grid 内卡片按拖动后的顺序写回 order 字段（拖到前面 = 较大 order） */
+/* HTML5 拖拽排序：把 list-grid 内行按拖动后的顺序写回 order 字段（拖到前面 = 较大 order） */
 function attachDragSort(){
   const grid=document.getElementById('mood-grid'); if(!grid) return;
-  const cards=[...grid.querySelectorAll('.mood-card')];
+  const cards=[...grid.querySelectorAll('.asset-row')];
   let dragId=null;
   cards.forEach(c=>{
     c.addEventListener('dragstart',e=>{
@@ -1632,11 +1697,11 @@ function attachDragSort(){
     c.addEventListener('drop',async e=>{
       e.preventDefault(); c.classList.remove('drag-over');
       if(!dragId || c.dataset.aid===dragId) return;
-      // 把 dragId 的卡片移到 c 之前
-      const src=grid.querySelector(`.mood-card[data-aid="${dragId}"]`);
+      // 把 dragId 的行移到 c 之前
+      const src=grid.querySelector(`.asset-row[data-aid="${dragId}"]`);
       if(src && c && src!==c){ grid.insertBefore(src, c); }
       // 收集 DOM 顺序，重写 order（越大越前）
-      const ids=[...grid.querySelectorAll('.mood-card')].map(x=>x.dataset.aid);
+      const ids=[...grid.querySelectorAll('.asset-row')].map(x=>x.dataset.aid);
       try{
         for(let i=0;i<ids.length;i++){
           const a=await getOne('assets',ids[i]); if(a){ a.order=ids.length-i; await putOne('assets',a); }
@@ -1688,10 +1753,19 @@ async function openAssetModal(existing, presetParent, presetData){
         <select id="am-cat">${ASSET_CATS.map((c,i)=>`<option value="${c.id}" ${(c.id===a.category||(i===0 && !a.category))?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
         <div class="paste-hint" id="am-cat-hint"></div>
       </div>
-      <div class="field"><label>集名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
+      <div class="field"><label>集名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist>
+        <div class="tag-editor">
+          <span class="ed-label">💡 名称快捷输入（点 ✕ 删除，点 chip 填入；新输入回车保存）</span>
+          <div class="sug" id="am-name-sugs"></div>
+          <input class="add-tag" id="am-name-add" placeholder="＋ 新增名称回车">
+        </div>
+      </div>
       <div class="field"><label>这个集是做什么的（用途说明）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
-        <div class="sug" id="am-purp-sugs"></div>
-        <div class="sug-hint">点上面的建议可快速填入，也可自己写。</div>
+        <div class="tag-editor">
+          <span class="ed-label">💡 用途说明快捷输入（点 ✕ 删除，点 chip 填入；新输入回车保存）</span>
+          <div class="sug" id="am-purp-sugs"></div>
+          <input class="add-tag" id="am-purp-add" placeholder="＋ 新增用途回车">
+        </div>
       </div>
       <div class="field"><label>集标签（逗号分隔，也可点下方建议）</label><input id="am-tags" style="width:100%" value="${esc((a.tags||[]).join(', '))}">
         <div class="tag-editor" id="am-tag-editor">
@@ -1713,11 +1787,17 @@ async function openAssetModal(existing, presetParent, presetData){
           <input class="add-tag" id="am-sub-add" placeholder="＋ 新增子类型后回车">
         </div>
       </div>
-      <div class="field"><label>资产名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="${isPrompt?'如：通用增强模板':'如：林晚·三视图 / 旧公寓·全景'}"><datalist id="am-name-list"></datalist></div>
+      <div class="field"><label>资产名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="${isPrompt?'如：通用增强模板':'如：林晚·三视图 / 旧公寓·全景'}"><datalist id="am-name-list"></datalist>
+        <div class="tag-editor">
+          <span class="ed-label">💡 名称快捷输入</span>
+          <div class="sug" id="am-name-sugs"></div>
+          <input class="add-tag" id="am-name-add" placeholder="＋ 新增名称回车">
+        </div>
+      </div>
       ${isPrompt ? `
       <div class="field"><label>📝 提示词内容 <small style="color:var(--accent)">（主体，必填）</small></label>
         <textarea id="am-gen" style="min-height:240px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;background:var(--bg2);border:1px solid var(--accent);border-radius:8px;padding:10px" placeholder="直接粘贴提示词，或从拼装台导出后保存到这里">${esc(a.genPrompt)}</textarea>
-        <div class="paste-hint">支持手写、粘贴、从拼装台导出（拼装台有「💾 存到提示词库」按钮）。</div>
+        <div class="paste-hint">支持手写、粘贴、从拼装台导出（拼装台有「💾 存到提示词库」按钮）。保存后会自动中英互译。</div>
       </div>` : `
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
@@ -1728,13 +1808,26 @@ async function openAssetModal(existing, presetParent, presetData){
         <textarea id="am-gen" placeholder="当时用的提示词…">${esc(a.genPrompt)}</textarea>
       </div>`}
       <div class="field"><label>用途说明（这个资产是干什么的）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
-        <div class="sug" id="am-purp-sugs"></div>
-        <div class="sug-hint">点上面的建议可快速填入，也可自己写。</div>
+        <div class="tag-editor">
+          <span class="ed-label">💡 用途说明快捷输入</span>
+          <div class="sug" id="am-purp-sugs"></div>
+          <input class="add-tag" id="am-purp-add" placeholder="＋ 新增用途回车">
+        </div>
       </div>
-      <div class="field"><label>${isPrompt?'适用模型（可选）':'生成工具 / 来源'}</label><input id="am-tool" list="am-tool-list" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图"><datalist id="am-tool-list"></datalist></div>
+      <div class="field"><label>${isPrompt?'适用模型（可选）':'生成工具 / 来源'}</label><input id="am-tool" list="am-tool-list" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图"><datalist id="am-tool-list"></datalist>
+        <div class="tag-editor">
+          <span class="ed-label">💡 工具快捷输入</span>
+          <div class="sug" id="am-tool-sugs"></div>
+          <input class="add-tag" id="am-tool-add" placeholder="＋ 新增工具回车">
+        </div>
+      </div>
       <div id="am-detail">${paletteRowsHtml}</div>
       <div class="field"><label>调用标注（喂给视频模型时复制这段话）</label><textarea id="am-callout" placeholder="自动生成，可修改">${esc(a.callout)}</textarea>
         <button class="btn" id="am-gen-callout" style="margin-top:6px">↺ 按模板重新生成标注</button>
+        <div class="tag-editor">
+          <span class="ed-label">💡 常用调用标注（从已有资产提取）</span>
+          <div class="sug" id="am-callout-sugs"></div>
+        </div>
       </div>
       <div class="field"><label>标签（逗号分隔，也可点下方建议）</label><input id="am-tags" style="width:100%" value="${esc((a.tags||[]).join(', '))}">
         <div class="sug" id="am-tag-sugs"></div>
@@ -1847,36 +1940,158 @@ async function openAssetModal(existing, presetParent, presetData){
   }
   function renderPurposeSuggestions(){
     const c=document.getElementById('am-purp-sugs'); if(!c)return;
-    const list=assetPresets.purposes[getCat()]||[];
-    c.innerHTML=list.map(v=>`<span class="sug-chip" data-v="${esc(v)}">${esc(v)}</span>`).join('');
-    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',()=>{
+    const cat=getCat(); const list=assetPresets.purposes[cat]||[];
+    c.innerHTML=list.map(v=>{
+      const deco=chipDecoColor(v);
+      return `<span class="sug-chip" data-v="${esc(v)}" style="background:${deco.bg};border-color:${deco.bd};color:${deco.fg}">${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="移除">✕</button></span>`;
+    }).join('');
+    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',e=>{
+      if(e.target.classList.contains('chip-x')) return;
       const inp=document.getElementById('am-purpose');
       inp.value=(inp.value.trim()?inp.value.trim()+' ':'')+ch.dataset.v;
     }));
+    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+      e.stopPropagation();
+      const v=x.dataset.x, cat=getCat();
+      if(assetPresets.purposes[cat]) assetPresets.purposes[cat]=assetPresets.purposes[cat].filter(t=>t!==v);
+      renderPurposeSuggestions();
+    }));
+    const addInp=document.getElementById('am-purp-add');
+    if(addInp && !addInp._wired){
+      addInp._wired=true;
+      addInp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const v=addInp.value.trim(); if(!v) return;
+          const cat=getCat(); assetPresets.purposes[cat]=assetPresets.purposes[cat]||[];
+          if(!assetPresets.purposes[cat].includes(v)) assetPresets.purposes[cat].push(v);
+          renderPurposeSuggestions();
+          addInp.value='';
+        }
+      });
+    }
   }
-  /* 子类型历史 + 预选项合并：从「预选项」+「历史」两个来源，按预设顺序+最近使用合并去重，点选填入 */
+  /* 工具字段：datalist 自动补全 + chip 快捷输入（点击填入、✕ 移除、回车新增） */
+  function renderToolQuickChips(){
+    const c=document.getElementById('am-tool-sugs'); if(!c) return;
+    const list=assetPresets.tools||[];
+    c.innerHTML=list.map(v=>{
+      const deco=chipDecoColor(v);
+      return `<span class="sug-chip" data-v="${esc(v)}" style="background:${deco.bg};border-color:${deco.bd};color:${deco.fg}">${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="移除">✕</button></span>`;
+    }).join('');
+    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',e=>{
+      if(e.target.classList.contains('chip-x')) return;
+      document.getElementById('am-tool').value=ch.dataset.v;
+    }));
+    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+      e.stopPropagation();
+      const v=x.dataset.x;
+      assetPresets.tools=assetPresets.tools.filter(t=>t!==v);
+      renderToolQuickChips();
+    }));
+    const addInp=document.getElementById('am-tool-add');
+    if(addInp && !addInp._wired){
+      addInp._wired=true;
+      addInp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const v=addInp.value.trim(); if(!v) return;
+          if(!assetPresets.tools.includes(v)) assetPresets.tools.push(v);
+          document.getElementById('am-tool').value=v;
+          addInp.value=''; renderToolQuickChips();
+        }
+      });
+    }
+  }
+  /* 名称字段：根据当前 cat 取对应建议数组（已存进 assetPresets.names[cat]） */
+  function renderNameQuickChips(){
+    const c=document.getElementById('am-name-sugs'); if(!c) return;
+    const cat=getCat(); const list=assetPresets.names[cat]||[];
+    c.innerHTML=list.map(v=>{
+      const deco=chipDecoColor(v);
+      return `<span class="sug-chip" data-v="${esc(v)}" style="background:${deco.bg};border-color:${deco.bd};color:${deco.fg}">${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="移除">✕</button></span>`;
+    }).join('');
+    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',e=>{
+      if(e.target.classList.contains('chip-x')) return;
+      document.getElementById('am-name').value=ch.dataset.v;
+    }));
+    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+      e.stopPropagation();
+      const v=x.dataset.x, cat=getCat();
+      if(assetPresets.names[cat]) assetPresets.names[cat]=assetPresets.names[cat].filter(t=>t!==v);
+      renderNameQuickChips();
+    }));
+    const addInp=document.getElementById('am-name-add');
+    if(addInp && !addInp._wired){
+      addInp._wired=true;
+      addInp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const v=addInp.value.trim(); if(!v) return;
+          const cat=getCat(); assetPresets.names[cat]=assetPresets.names[cat]||[];
+          if(!assetPresets.names[cat].includes(v)) assetPresets.names[cat].push(v);
+          document.getElementById('am-name').value=v;
+          addInp.value=''; renderNameQuickChips();
+        }
+      });
+    }
+  }
+  /* 调用标注字段：从已有资产 callout 历史提取建议 */
+  function renderCalloutQuickChips(){
+    const c=document.getElementById('am-callout-sugs'); if(!c) return;
+    // 取该父集分类下所有资产的 callout，去重取最近 12 条
+    const allC=allAssets.filter(x=>x.callout);
+    const seen=new Set(); const list=[];
+    for(const x of allC){
+      // 同分类下：找最新顺序
+      if(list.length>=12) break;
+      if(seen.has(x.callout)) continue;
+      seen.add(x.callout); list.push(x.callout);
+    }
+    if(!list.length){ c.innerHTML=''; return; }
+    c.innerHTML=list.map(v=>{
+      const deco=chipDecoColor(v);
+      return `<span class="sug-chip" data-v="${esc(v)}" style="background:${deco.bg};border-color:${deco.bd};color:${deco.fg}" title="${esc(v.slice(0,40))}…">${esc(v.length>24?v.slice(0,24)+'…':v)}<button class="chip-x" data-x="${esc(v)}" title="从列表移除">✕</button></span>`;
+    }).join('');
+    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',e=>{
+      if(e.target.classList.contains('chip-x')) return;
+      const inp=document.getElementById('am-callout');
+      inp.value=ch.dataset.v;
+    }));
+    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+      e.stopPropagation();
+      // 此处仅做视觉移除（按内容去重过滤）
+      const v=x.dataset.x;
+      const fresh=allC.filter(x=>x.callout!==v);
+      renderCalloutQuickChips();
+    }));
+  }
+  /* 子类型数据源：当前所属集根资产的 subTypes[] + 该集下子资产历史。
+     注意：集内外完全独立——同一个「人物」分类下，不同集可各自管理子类型预设，
+     不再受 assetPresets.subtypes[category] 全局预设绑定。 */
+  function getCollectionSubTypes(){
+    if(!a.parent) return {root:null, list:[], merged:[]};
+    const root = allAssets.find(x=>x.name===a.parent && !x.parent);
+    if(!root) return {root:null, list:[], merged:[]};
+    root.subTypes = root.subTypes || [];
+    // 集内子资产历史（按 createdAt 倒序去重）
+    const seen = new Set(root.subTypes);
+    const hist = [];
+    allAssets.filter(x=>x.parent===a.parent && x.subType).sort((a,b)=>b.createdAt-a.createdAt).forEach(x=>{
+      if(!seen.has(x.subType)){ seen.add(x.subType); hist.push(x.subType); }
+    });
+    return { root, list:root.subTypes, merged:[...root.subTypes, ...hist] };
+  }
   function renderSubtypeHistory(){
     const c=document.getElementById('am-sub-history'); if(!c) return;
-    const all=allAssets||[];
-    // 1) 预选项
-    const presetList=assetPresets.subtypes[parentCategory]||[];
-    // 2) 历史：当前父集类型下用过的
-    const hist=[];
-    const seen=new Set();
-    const list=all.filter(x=>x.subType).filter(x=>{
-      if(!x.parent) return x.category===parentCategory;
-      const pa=all.find(p=>p.name===x.parent && !p.parent);
-      return pa && pa.category===parentCategory;
-    }).sort((a,b)=>b.createdAt-a.createdAt);
-    for(const x of list){ if(!seen.has(x.subType)){ seen.add(x.subType); hist.push(x.subType); } }
-    // 合并：预设在前，历史在后（去重）
-    const merged=[...presetList, ...hist.filter(v=>!presetList.includes(v))];
-    if(!merged.length){ c.innerHTML=''; return; }
+    const { root, merged } = getCollectionSubTypes();
+    if(!root){ c.innerHTML='<span class="meta">先在某个集里创建资产时才能添加子类型。</span>'; return; }
+    if(!merged.length){ c.innerHTML='<span class="meta">还没有子类型，点下方输入框新增。</span>'; return; }
     const cur=(document.getElementById('am-subtype')||{}).value||'';
     c.innerHTML=merged.map(v=>{
       const col=subTypeColor(v);
       const on=v===cur;
-      return `<span class="sug-chip ${on?'on':''}" data-v="${esc(v)}" style="color:${col};border-color:${col}"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;margin-right:4px"></span>${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="从预选项移除">✕</button></span>`;
+      return `<span class="sug-chip ${on?'on':''}" data-v="${esc(v)}" style="color:${col};border-color:${col}"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;margin-right:4px"></span>${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="从该集的子类型中移除">✕</button></span>`;
     }).join('');
     c.querySelectorAll('.sug-chip').forEach(ch=>{
       ch.addEventListener('click',e=>{
@@ -1884,25 +2099,30 @@ async function openAssetModal(existing, presetParent, presetData){
         const inp=document.getElementById('am-subtype'); if(inp){ inp.value=ch.dataset.v; renderSubtypeHistory(); }
       });
     });
-    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',async e=>{
       e.stopPropagation();
       const v=x.dataset.x;
-      if(assetPresets.subtypes[parentCategory]){
-        assetPresets.subtypes[parentCategory]=assetPresets.subtypes[parentCategory].filter(t=>t!==v);
+      const cur = getCollectionSubTypes();
+      if(cur.root){
+        cur.root.subTypes = cur.root.subTypes.filter(t=>t!==v);
+        await putOne('assets', cur.root);
+        renderSubtypeHistory();
       }
-      if(assetPresets.subtypeColors && assetPresets.subtypeColors[v]) delete assetPresets.subtypeColors[v];
-      renderSubtypeHistory();
     }));
-    // 新增子类型回车
+    // 新增子类型回车 → 写入到根资产的 subTypes[]，与集绑定
     const addInp=document.getElementById('am-sub-add');
     if(addInp && !addInp._wired){
       addInp._wired=true;
-      addInp.addEventListener('keydown',e=>{
+      addInp.addEventListener('keydown',async e=>{
         if(e.key==='Enter'){
           e.preventDefault();
           const v=addInp.value.trim(); if(!v) return;
-          assetPresets.subtypes[parentCategory]=assetPresets.subtypes[parentCategory]||[];
-          if(!assetPresets.subtypes[parentCategory].includes(v)) assetPresets.subtypes[parentCategory].push(v);
+          const cur = getCollectionSubTypes();
+          if(cur.root){
+            cur.root.subTypes = cur.root.subTypes || [];
+            if(!cur.root.subTypes.includes(v)) cur.root.subTypes.push(v);
+            await putOne('assets', cur.root);
+          }
           document.getElementById('am-subtype').value=v;
           addInp.value=''; renderSubtypeHistory();
         }
@@ -1913,10 +2133,17 @@ async function openAssetModal(existing, presetParent, presetData){
     const cat=getCat();
     fillDatalist('am-tool-list',assetPresets.tools);
     fillDatalist('am-name-list',assetPresets.names[cat]||[]);
-    fillDatalist('am-subtype-list',assetPresets.subtypes[parentCategory]||[]);
+    // 子类型预选项：子资产时按当前所属集；新建/编辑集时按当前选中集类型
+    try{
+      const subList = !isCollection ? getCollectionSubTypes().merged : (assetPresets.subtypes[cat]||[]);
+      fillDatalist('am-subtype-list', subList);
+    }catch(_){}
     if(document.getElementById('am-parent-list')) fillDatalist('am-parent-list',assetCharNames);
     renderTagSuggestions();
     renderPurposeSuggestions();
+    renderToolQuickChips();
+    renderNameQuickChips();
+    renderCalloutQuickChips();
     renderSubtypeHistory();
   }
   // 异步拉取已建人物名（仅子资产模式可能用到）
@@ -2007,37 +2234,43 @@ async function openAssetModal(existing, presetParent, presetData){
       a.tags=document.getElementById('am-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
       a.images=images.map(im=>({blob:im.blob||null,url:im.url||null,caption:im.caption||''}));
       a.projectId=state.assetProject;
-      // 提示词资产：保存后异步自动中英互译，原文存 genPrompt，译文存 genPromptTr
+      // 提示词资产：保存时检测语言，置标志位（genPromptTr 暂为空 → 行内显示「翻译中…」）
+      let needTranslate=false, trFrom='', trTo='';
       if(!isCollection && parentCategory==='prompt' && a.genPrompt){
         try{
-          const from=/[一-鿿]/.test(a.genPrompt)?'zh':'en';
-          const to=from==='zh'?'en':'zh';
-          // 不阻塞保存：先保存原文，再异步翻译；翻译完更新一次
-          a.genPromptLang=from; a.genPromptTr='';
+          trFrom=/[一-鿿]/.test(a.genPrompt)?'zh':'en';
+          trTo=trFrom==='zh'?'en':'zh';
+          a.genPromptLang=trFrom; a.genPromptTr='';
+          needTranslate=true;
         }catch(_){}
       }
       await putOne('assets',a);
       if(!isCollection && a.tool && !assetPresets.tools.includes(a.tool)){assetPresets.tools.push(a.tool);}
       (a.tags||[]).forEach(t=>{if(t && !assetPresets.tags.includes(t))assetPresets.tags.push(t);});
-      // 子类型：把当前子类型并入预选项
-      if(!isCollection && a.subType){
-        assetPresets.subtypes[parentCategory]=assetPresets.subtypes[parentCategory]||[];
-        if(!assetPresets.subtypes[parentCategory].includes(a.subType)) assetPresets.subtypes[parentCategory].push(a.subType);
+      // 子类型：把当前子类型并入根资产 subTypes（与所在集绑定，不再写入全局预选项）
+      if(!isCollection && a.subType && a.parent){
+        const rootAsset = (await getAll('assets')).find(x=>x.name===a.parent && !x.parent);
+        if(rootAsset){
+          rootAsset.subTypes = rootAsset.subTypes || [];
+          if(!rootAsset.subTypes.includes(a.subType)) rootAsset.subTypes.push(a.subType);
+          await putOne('assets', rootAsset);
+        }
       }
       await saveAssetPresets();
-      closeModal();toast(isEdit?'已保存修改 ✓':'已创建'+(isCollection?'集 ✓':'资产 ✓'));
+      const willTranslate = needTranslate;
+      closeModal();
+      toast(willTranslate ? '已保存 + 翻译中…' : (isEdit?'已保存修改 ✓':'已创建'+(isCollection?'集 ✓':'资产 ✓')));
       renderAssets();populateAssetParents();
       // 提示词资产：保存后异步翻译（中文→英文 / 英文→中文），译文写回 genPromptTr
-      if(!isCollection && parentCategory==='prompt' && a.genPrompt && a.genPromptLang){
-        const from=a.genPromptLang, to=from==='zh'?'en':'zh';
-        translateText(a.genPrompt, from, to).then(async tr=>{
+      if(willTranslate){
+        translateText(a.genPrompt, trFrom, trTo).then(async tr=>{
           try{
             const fresh=await getOne('assets',a.id); if(!fresh) return;
             fresh.genPromptTr=tr; await putOne('assets',fresh);
-            // 若该视图还在原地，自动重渲染一次让卡片显示译文
             if(state.assetCollection) renderAssets();
+            toast('已自动翻译 ✓');
           }catch(_){}
-        }).catch(()=>{/* 翻译失败静默 */});
+        }).catch(err=>{ toast('翻译失败：'+(err&&err.message||'请检查网络')); });
       }
     }catch(err){ console.error('save asset failed:',err); toast('保存失败：'+(err&&err.message||err)); }
   });
@@ -2200,35 +2433,7 @@ async function exportComposerToPrompt(){
     openAssetModal(null, collectionName, {category:'prompt', name:pname, subType:psub, genPrompt:content});
   });
 }
-function openPresetManager(){
-  const root=document.getElementById('modal-root');
-  const flat=t=>(t||[]).join('\n');
-  const unflat=t=>t.split('\n').map(s=>s.trim()).filter(Boolean);
-  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(720px,100%);max-height:90vh;display:flex;flex-direction:column">
-    <h3>管理预选项 <small>新建资产时的输入建议，可改 / 删 / 加，自动保存</small></h3>
-    <div class="mtab" style="overflow-y:auto;padding-right:6px">
-      <div class="field"><label>生成工具 / 来源（每行一个）</label><textarea id="pm-tools">${flat(assetPresets.tools)}</textarea></div>
-      <div class="field"><label>常用标签（每行一个）</label><textarea id="pm-tags">${flat(assetPresets.tags)}</textarea></div>
-      ${ASSET_CATS.map(c=>`<div class="field"><label>${c.icon} ${c.name} · 名称建议</label><textarea id="pm-name-${c.id}">${flat(assetPresets.names[c.id])}</textarea></div><div class="field"><label>${c.icon} ${c.name} · 子类型建议（在该集内新建资产时的分类选项，每行一个）</label><textarea id="pm-sub-${c.id}">${flat(assetPresets.subtypes[c.id])}</textarea></div><div class="field"><label>${c.icon} ${c.name} · 用途说明建议</label><textarea id="pm-purp-${c.id}">${flat(assetPresets.purposes[c.id])}</textarea></div>`).join('')}
-    </div>
-    <div class="row" style="justify-content:flex-end;margin-top:10px">
-      <button class="btn" onclick="closeModal()">取消</button>
-      <button class="btn primary" id="pm-save">保存预选项</button>
-    </div>
-  </div></div>`;
-  const overlay=root.querySelector('.overlay');overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
-  document.getElementById('pm-save').addEventListener('click',async()=>{
-    assetPresets.tools=unflat(document.getElementById('pm-tools').value);
-    assetPresets.tags=unflat(document.getElementById('pm-tags').value);
-    ASSET_CATS.forEach(c=>{
-      assetPresets.names[c.id]=unflat(document.getElementById('pm-name-'+c.id).value);
-      assetPresets.subtypes[c.id]=unflat(document.getElementById('pm-sub-'+c.id).value);
-      assetPresets.purposes[c.id]=unflat(document.getElementById('pm-purp-'+c.id).value);
-    });
-    await saveAssetPresets();
-    closeModal();toast('已保存预选项 ✓');
-  });
-}
+/* 预选项入口已下线：每个输入字段自带 chip 快捷输入 + 回车新增。 */
 /* 资产展示视图（查看）：图在上、信息在下、可复制，不再弹出输入表单 */
 async function openAssetView(id){
   const a=await getOne('assets',id); if(!a)return;
@@ -2316,7 +2521,7 @@ async function openAssetView(id){
   document.getElementById('av-edit').addEventListener('click',()=>{closeModal();openAssetModal(a);});
 }
 document.getElementById('asset-cats-edit').addEventListener('click',openAssetCatEditor);
-document.getElementById('asset-presets').addEventListener('click',openPresetManager);
+// document.getElementById('asset-presets')?.addEventListener('click',openPresetManager); // ⚙ 预选项入口已下线（按钮已隐藏），函数也已删除
 document.getElementById('asset-add').addEventListener('click',()=>{
   if(state.assetCollection) openAssetModal(null, state.assetCollection); // 集内→新建资产，默认归入当前集
   else openAssetModal(null, ''); // 总览→新建集（根资产，无所属集）
@@ -2330,7 +2535,7 @@ document.getElementById('asset-cat-tabs').addEventListener('click',e=>{const t=e
 document.getElementById('asset-grid').addEventListener('click',async e=>{
   const tgl=e.target.closest('[data-toggle]');
   if(tgl){ e.stopPropagation(); const aid=tgl.dataset.toggle; (async()=>{ const a=await getOne('assets',aid); if(!a)return; a.thumbMode=(a.thumbMode||'palette')==='image'?'palette':'image'; await putOne('assets',a); renderAssets(); })(); return; }
-  const card=e.target.closest('.collection-card,.mood-card');if(!card)return;
+  const card=e.target.closest('.collection-card,.mood-card,.asset-row');if(!card)return;
   const id=card.dataset.aid;
   const btn=e.target.closest('button[data-act]');
   if(btn){
@@ -2341,7 +2546,7 @@ document.getElementById('asset-grid').addEventListener('click',async e=>{
         const all=await getAll('assets'); for(const c of all.filter(x=>x.parent===a.name)) await delOne('assets',c.id); }
       await delOne('assets',id); toast('已删除'); renderAssets(); populateAssetParents(); } return; }
   }
-  // 点卡片主体：集卡片直接进集，子资产卡片打开查看
+  // 点卡片主体：集卡片直接进集，子资产卡片/行打开查看
   if(card.classList.contains('collection-card')){
     const a=await getOne('assets',id); if(a){state.assetCollection=a.name;renderAssets();}
   } else {
