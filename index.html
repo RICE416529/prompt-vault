@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17n';
+    var PAGE_VER='2026-08-17o';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -473,7 +473,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17n';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17o';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1038,21 +1038,33 @@ function openCatTagManager(){
 /* ============ 翻译 ============ */
 async function translateText(text,from,to){
   const q=encodeURIComponent(text);
+  const TM=8000; // 单接口超时 8s，避免卡死
+  const fetchTO=(url)=>{ const ctl=new AbortController(); const id=setTimeout(()=>ctl.abort(),TM);
+    return fetch(url,{signal:ctl.signal}).finally(()=>clearTimeout(id)); };
+  const errs=[];
+  const tryOne=async (name,url,parse)=>{
+    let r; try{ r=await fetchTO(url); }catch(e){ throw new Error(name+': '+(e.name==='AbortError'?'超时':e.message)); }
+    if(!r.ok) throw new Error(name+': HTTP '+r.status);
+    let j; try{ j=await r.json(); }catch(e){ throw new Error(name+': 非法 JSON'); }
+    const t=parse(j);
+    if(!t || /MYMEMORY WARNING/.test(t)) throw new Error(name+': 空或拒答');
+    return t;
+  };
+  // 三个公开接口，逐个尝试，都不行就列出每家具体原因（更友好排查）
   const candidates=[
-    'https://translate.googleapis.com/translate_a/single?client=gtx&sl='+from+'&tl='+to+'&dt=t&q='+q,
-    'https://api.mymemory.translated.net/get?q='+q+'&langpair='+from+'|'+to
+    ['googleapis','https://translate.googleapis.com/translate_a/single?client=gtx&sl='+from+'&tl='+to+'&dt=t&q='+q,
+      j=>j[0]&&j[0].map(x=>x[0]).join('')],
+    ['mymemory','https://api.mymemory.translated.net/get?q='+q+'&langpair='+from+'|'+to,
+      j=>j.responseData&&j.responseData.translatedText],
+    ['libretranslate','https://translate.argosopentech.com/translate?q='+q+'&source='+from+'&target='+to,
+      j=>j&&j.translatedText]
   ];
-  for(const url of candidates){
-    try{
-      const r=await fetch(url);const j=await r.json();
-      let t = url.includes('mymemory') ? (j.responseData&&j.responseData.translatedText) : (j[0]&&j[0].map(x=>x[0]).join(''));
-      if(t && !/MYMEMORY WARNING/.test(t)) return t;
-    }catch(e){/* 尝试下一个接口 */}
+  for(const [name,url,parse] of candidates){
+    try{ return await tryOne(name,url,parse); }
+    catch(e){ errs.push((e&&e.message||String(e))); }
   }
-  throw new Error('所有翻译接口均不可用，请检查网络后重试');
+  throw new Error('所有翻译接口均不可用（可能需 VPN 或检查网络）: '+errs.join(' / '));
 }
-
-
 /* ============ 弹窗：拆解 ============ */
 function openDecomposeModal(capId,raw){
   const root=document.getElementById('modal-root');
@@ -1352,8 +1364,8 @@ async function loadAssetCats(){
 }
 async function saveAssetCats(){ await putOne('meta',{id:'assetCats',value:ASSET_CATS}); }
 const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
-// 子资产「子类型」建议（即「在集里建资产时可选的细分分类」）现由 assetPresets.subtypes 提供，
-// 按父集类型（category）分组，可在「⚙ 预选项」里逐类编辑、持久化。见 DEFAULT_ASSET_PRESETS.subtypes。
+// 子类型：子资产与已存在的集绑定（root.subTypes 存在该集根资产上），不再走全局预选项。
+// assetPresets.subtypes 仅作**创建新集时**的初始参考（一次性，不会回写）。
 // 集封面：显式封面 > 上传封面图 > 与子资产显示模式联动（色板集专属）
 function collectionCover(name, assets){
   const root=assets.find(a=>a.name===name && !a.parent); if(!root) return '';
@@ -1563,11 +1575,9 @@ function moodRowBodyHtml(a, opts){
   // 缩略图（按品类差异）
   let thumb;
   if(a.category==='prompt' && a.parent){
-    const txt=a.genPrompt||'';
-    thumb = txt
-      ? `<div class="row-thumb prompt"><div class="prompt-preview">${esc(txt.slice(0,120))}${txt.length>120?'\u2026':''}</div></div>`
-      : `<div class="row-thumb"><span class="ph">暂无内容</span></div>`;
-  } else if(a.category==='palette' && (a.thumbMode||'palette')!=='image'){
+    // 提示词集子资产不要封面：缩略图位跳过，内容全部显示在行 body
+    thumb = '';
+  }  else if(a.category==='palette' && (a.thumbMode||'palette')!=='image'){
     const cols=(a.detail&&a.detail.colors||[]);
     const strip=cols.length?cols.map(c=>`<span style="flex:1;height:100%;background:${esc(c.hex)}"></span>`).join(''):'<span class="ph">无色板</span>';
     thumb = `<div class="row-thumb" style="padding:0"><div style="display:flex;gap:2px;width:100%;height:100%">${strip}</div></div>`;
@@ -1581,11 +1591,16 @@ function moodRowBodyHtml(a, opts){
   const isPrompt=a.category==='prompt';
   let body;
   if(isPrompt){
+    // 提示词集行：翻译 + 原文双行全起，不再截断（已去掉封面占位）
     const hasTr=!!a.genPromptTr;
     const trHtml = hasTr
-      ? `<div class="row-en" title="${esc(a.genPromptTr)}">${esc((a.genPromptTr||'').slice(0,80))}${(a.genPromptTr||'').length>80?'\u2026':''}</div>`
+      ? `<div class="row-en" title="${esc(a.genPromptTr)}" style="white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${esc(a.genPromptTr)}</div>`
       : (a.genPromptLang ? `<div class="row-tr-warn">翻译中…</div>` : '');
-    body = `<div class="row-line2">${trHtml}<div class="row-zh" title="${esc(a.genPrompt)}">${esc((a.genPrompt||'(空白)').slice(0,80))}${(a.genPrompt||'').length>80?'\u2026':''}</div></div>`;
+    const zhHtml = a.genPrompt
+      ? `<div class="row-zh" title="${esc(a.genPrompt)}" style="white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${esc(a.genPrompt)}</div>`
+      : `<div class="row-zh" style="opacity:.55">(空白)</div>`;
+    body = `<div class="row-line2">${trHtml}${zhHtml}</div>`;
+  
   } else {
     const purpose=a.purpose?`<span title="${esc(a.purpose)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60ch;display:inline-block">${esc(a.purpose)}</span>`:'';
     const tagline=(a.tags&&a.tags.length)?a.tags.map(t=>{const c=chipDecoColor(t);return `<span style="font-size:10px;padding:1px 7px;border-radius:9px;background:${c.bg};border:1px solid ${c.bd};color:${c.fg}">${esc(t)}</span>`;}).join(' '):'';
@@ -1594,7 +1609,7 @@ function moodRowBodyHtml(a, opts){
   return `<div class="asset-row" data-aid="${a.id}" draggable="${inCollection?'true':'false'}">
     <span class="row-bar" style="background:${barCol}"></span>
     ${thumb}
-    <div class="row-body">
+    <div class="row-body${thumb?'':' full'}" style="${thumb?'':'padding-left:14px'}">
       <div class="row-line1">${subBadge}<span class="row-name" title="${esc(a.name||'(未命名)')}">${esc(a.name||'(未命名)')}</span></div>
       ${body}
     </div>
@@ -2133,9 +2148,18 @@ async function openAssetModal(existing, presetParent, presetData){
     const cat=getCat();
     fillDatalist('am-tool-list',assetPresets.tools);
     fillDatalist('am-name-list',assetPresets.names[cat]||[]);
-    // 子类型预选项：子资产时按当前所属集；新建/编辑集时按当前选中集类型
+    // 子类型预选项：子资产与编辑现有集绝对以当前所属集为准（集间互不干扰）。
+    // 只有创建新集时才退化为全局默认同类为初始候选（一次性，不会回写全局）。
     try{
-      const subList = !isCollection ? getCollectionSubTypes().merged : (assetPresets.subtypes[cat]||[]);
+      let subList;
+      if(!isCollection){
+        subList = getCollectionSubTypes().merged;
+      } else if(isEdit){
+        const curRoot = allAssets.find(x=>x.id===a.id);
+        subList = (curRoot&&curRoot.subTypes||[]).slice();
+      } else {
+        subList = assetPresets.subtypes[cat]||[];
+      }
       fillDatalist('am-subtype-list', subList);
     }catch(_){}
     if(document.getElementById('am-parent-list')) fillDatalist('am-parent-list',assetCharNames);
