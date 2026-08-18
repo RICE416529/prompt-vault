@@ -2672,14 +2672,15 @@ document.getElementById('asset-del-project').addEventListener('click',async()=>{
 });
 /* ============ 整库备份 / 导入合并（按 id 并集去重） ============ */
 // 导出：把对象里的 Blob 递归转成 dataUrl，便于塞进单个 JSON
+// 约定：Blob 在 JSON 里表示为 {__blob:"data:..."}，导入时再还原回 Blob
 async function blobFieldsToDataUrl(v){
-  if(v instanceof Blob) return await blobToDataURL(v);
+  if(v instanceof Blob) return {__blob: await blobToDataURL(v)};
   if(Array.isArray(v)) return await Promise.all(v.map(blobFieldsToDataUrl));
   if(v && typeof v==='object'){
     const out={};
     for(const k of Object.keys(v)){
       const val=v[k];
-      if(val instanceof Blob) out[k]=await blobToDataURL(val);
+      if(val instanceof Blob) out[k]={__blob: await blobToDataURL(val)};
       else if(val && typeof val==='object') out[k]=await blobFieldsToDataUrl(val);
       else out[k]=val;
     }
@@ -2687,18 +2688,16 @@ async function blobFieldsToDataUrl(v){
   }
   return v;
 }
-// 导入：把 dataUrl 递归还原成 Blob（video / images 等）
+// 导入：把 {__blob:"data:..."} 递归还原成 Blob（video / images 等）
 async function reviveDataUrls(v){
   if(v && typeof v==='object'){
     if(Array.isArray(v)) return await Promise.all(v.map(reviveDataUrls));
+    if(v.__blob!==undefined) return await dataURLToBlob(v.__blob);
     const out={};
     for(const k of Object.keys(v)){
       const val=v[k];
-      if(k==='dataUrl' && typeof val==='string' && val.startsWith('data:')){
-        out.blob=await dataURLToBlob(val);
-      } else if(val && typeof val==='object'){
-        out[k]=await reviveDataUrls(val);
-      } else out[k]=val;
+      if(val && typeof val==='object') out[k]=await reviveDataUrls(val);
+      else out[k]=val;
     }
     return out;
   }
