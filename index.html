@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17r';
+    var PAGE_VER='2026-08-17s';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -474,7 +474,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17r';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17s';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -2569,13 +2569,20 @@ document.getElementById('asset-del-project').addEventListener('click',async()=>{
   if(!id){ toast('请先在左侧项目栏选择一个要删除的项目'); return; }
   const projects=await getAll('projects'); const p=projects.find(x=>x.id===id);
   if(!p){ toast('项目不存在'); return; }
-  if(!confirm('确定删除项目「'+(p.name||'未命名')+'」？\n该项目下的资产不会被删除，会自动归入「全部项目」。')) return;
+  // 级联删除：项目下所有资产 + 若是「集（根）」其下子资产
+  const all=await getAll('assets');
+  const ownAssets=all.filter(x=>x.projectId===id);
+  const ownRoots=ownAssets.filter(x=>!x.parent);
+  const rootNames=new Set(ownRoots.map(x=>x.name));
+  const ownChildren=all.filter(x=>x.parent && rootNames.has(x.parent));
+  const toDelSet=new Set([...ownAssets.map(x=>x.id), ...ownChildren.map(x=>x.id)]);
+  const totalCount=toDelSet.size;
+  if(!confirm('确定删除项目「'+(p.name||'未命名')+'」？\n该项目下共 '+totalCount+' 个资产（含子资产）将被永久删除，此操作不可恢复。')) return;
+  for(const a of all.filter(x=>toDelSet.has(x.id))) await delOne('assets',a.id);
   await delOne('projects',id);
-  const assets=await getAll('assets');
-  for(const a of assets.filter(x=>x.projectId===id)){ a.projectId=''; await putOne('assets',a); }
   state.assetProject='';
   await populateProjects(); renderAssets();
-  toast('已删除项目「'+(p.name||'未命名')+'」');
+  toast('已删除项目「'+(p.name||'未命名')+'」及其 '+totalCount+' 个资产');
 });
 document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';state.assetCollection='';populateAssetParents();renderAssets();});
 document.getElementById('asset-parent').addEventListener('change',e=>{state.assetParent=e.target.value;renderAssets();});
