@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17k';
+    var PAGE_VER='2026-08-17l';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -289,6 +289,7 @@
       <button class="btn" id="composer-copy-pos">复制正向</button>
       <button class="btn" id="composer-copy-neg">复制负面</button>
       <button class="btn primary" id="composer-save-combo">💾 保存组合</button>
+      <button class="btn" id="composer-to-prompt" title="把当前拼装好的提示词存到提示词库（资产库的提示词 tab）">📝 存到提示词库</button>
       <div class="spacer"></div>
       <span class="meta" id="composer-count"></span>
     </div>
@@ -374,6 +375,7 @@
       <button class="btn" id="asset-new-project">＋ 项目</button>
       <select id="asset-parent" hidden><option value="">全部角色</option></select>
       <div class="spacer"></div>
+      <button class="btn" id="asset-cats-edit" title="管理顶部 tab 上的集分类（增/改/删/排序）">🗂 分类</button>
       <button class="btn" id="asset-presets" title="管理新建资产时的输入建议">⚙ 预选项</button>
       <button class="btn primary" id="asset-add">＋ 新建资产</button>
       <button class="btn" id="asset-export">📤 导出 Briefing</button>
@@ -424,7 +426,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17k';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17l';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1214,6 +1216,7 @@ document.getElementById('composer-clear').addEventListener('click',async()=>{sta
 document.getElementById('composer-save-combo').addEventListener('click',openSaveComboModal);
 document.getElementById('composer-copy-pos').addEventListener('click',()=>copyText(document.getElementById('assembled').value));
 document.getElementById('composer-copy-neg').addEventListener('click',()=>copyText(document.getElementById('assembled-neg').value));
+document.getElementById('composer-to-prompt').addEventListener('click',exportComposerToPrompt);
 // textarea 手动编辑时也自动增高
 document.getElementById('assembled').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,360)+'px';});
 document.getElementById('assembled-neg').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,200)+'px';});
@@ -1285,14 +1288,22 @@ function blobToDataURL(b){return new Promise(r=>{const fr=new FileReader();fr.on
 function dataURLToBlob(u){return fetch(u).then(r=>r.blob());}
 
 /* ============ 资产库 ============ */
-const ASSET_CATS = [
+/* 集分类（顶部 tab 上显示的类型）。可由用户在「🗂 分类」里自由增/改名/删除/排序，持久化到 meta.assetCats。
+   默认 4 类：人物 / 场景 / 色板 / 提示词（提示词为新增，存放文本类提示词资产）。 */
+const DEFAULT_ASSET_CATS = [
   {id:'character', name:'人物', icon:'🧑', parent:'', hint:'角色身份资产：四视图 / 双头像+服装正背面'},
-  {id:'costume', name:'妆造', icon:'👗', parent:'所属角色', hint:'同一角色的换装版本，每套一张四视图'},
-  {id:'expression', name:'表情动作', icon:'🎭', parent:'所属角色', hint:'表情九/十六宫格 + 动作16宫格图鉴'},
-  {id:'scene', name:'场景', icon:'🏞', parent:'', hint:'九宫格：8角度 + 1平面布局'},
-  {id:'prop', name:'道具', icon:'🎒', parent:'', hint:'实体三视图 / 虚拟16宫格'},
-  {id:'palette', name:'色板', icon:'🎨', parent:'', hint:'7色块：类型 / HEX / 使用场景'},
+  {id:'scene', name:'场景', icon:'🏞', parent:'', hint:'场景资产：全景 / 中景 / 细节'},
+  {id:'palette', name:'色板', icon:'🎨', parent:'', hint:'色板资产：7色块 / 类型 / HEX / 使用场景'},
+  {id:'prompt', name:'提示词', icon:'📝', parent:'', hint:'提示词资产：文本提示词，可从拼装台导入 / 手写 / 粘贴'}
 ];
+let ASSET_CATS = JSON.parse(JSON.stringify(DEFAULT_ASSET_CATS));
+async function loadAssetCats(){
+  try{
+    const d=await getOne('meta','assetCats');
+    if(d && Array.isArray(d.value) && d.value.length){ ASSET_CATS=d.value; }
+  }catch(e){ console.warn('loadAssetCats failed',e); }
+}
+async function saveAssetCats(){ await putOne('meta',{id:'assetCats',value:ASSET_CATS}); }
 const assetCatName = id => (ASSET_CATS.find(c=>c.id===id)||{}).name || id;
 // 子资产「子类型」建议（即「在集里建资产时可选的细分分类」）现由 assetPresets.subtypes 提供，
 // 按父集类型（category）分组，可在「⚙ 预选项」里逐类编辑、持久化。见 DEFAULT_ASSET_PRESETS.subtypes。
@@ -1339,27 +1350,21 @@ const DEFAULT_ASSET_PRESETS = {
   tags: ['女主','男主','配角','反派','悬疑','科幻','古风','现代','冷色调','暖色调','写实','动漫风'],
   names: {
     character:['女主·林晚','男主·','配角·','反派·'],
-    costume:['日常造型','战斗造型','礼服造型'],
-    expression:['情绪九宫格','动作十六宫格'],
     scene:['旧公寓','天台','咖啡馆','雨夜街道'],
-    prop:['绿色包包','怀表','匕首'],
-    palette:['冷峻悬疑色板','暖色回忆色板']
+    palette:['冷峻悬疑色板','暖色回忆色板'],
+    prompt:['通用增强模板','角色设定模板','场景描述模板','风格描述模板']
   },
   purposes: {
     character:['保持脸部特征、发型、身材比例与整体气质一致','多镜头一致性参考','角色设定定稿'],
-    costume:['保持本场戏服装、鞋子、配饰与整体穿搭一致','换装版本对照'],
-    expression:['参考指定情绪状态，表情克制、不崩坏','动作幅度参考'],
     scene:['作为本片视觉锚定：空间位置与光线方向前后一致','场景氛围定调'],
-    prop:['保持道具形状、颜色、材质一致','虚拟技能/特效形态一致'],
-    palette:['统一整条视频色彩方向','控制高饱和霓虹，保持低饱和质感']
+    palette:['统一整条视频色彩方向','控制高饱和霓虹，保持低饱和质感'],
+    prompt:['通用增强提示词','角色设定提示词','场景描述提示词','风格控制提示词']
   },
   subtypes: {
     character:['表情动作','妆造','道具','三视图','全身照','头像','半身','配饰','服装','发型','参考图'],
-    costume:['常服','主服','战斗服','礼服','季节装','配饰'],
-    expression:['表情九宫格','表情十六宫格','动作十六宫格','微表情'],
     scene:['道具','天气','时间','全景','中景','近景','俯视','仰视','细节','概念图','平面布局'],
-    prop:['三视图','实拍参考','3D渲染','特写','使用示意'],
-    palette:['主色板','光影板','材质板']
+    palette:['主色板','光影板','材质板'],
+    prompt:['通用增强','角色设定','场景描述','动作描述','风格描述','镜头运镜','负面提示词']
   }
 };
 let assetPresets = JSON.parse(JSON.stringify(DEFAULT_ASSET_PRESETS));
@@ -1425,6 +1430,12 @@ function renderAssetCatTabs(){
 }
 /* 缩略图：集封面 / 画板卡片通用 */
 function assetThumbHtml(a){
+  // 提示词资产：显示文本预览
+  if(a.category==='prompt'){
+    const txt=(a.genPrompt||'').slice(0,200);
+    const preview=txt?`<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.55;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;text-align:left">${esc(txt)}</div>`:'<div class="ph">暂无内容</div>';
+    return `<div class="m-thumb prompt-thumb" style="padding:10px;background:var(--bg2);align-items:flex-start;justify-content:flex-start;overflow:hidden">${preview}</div>`;
+  }
   // 色板资产：可按 thumbMode 在「色板条」与「上传图片」之间切换显示封面
   if(a.category==='palette' && (a.thumbMode||'palette')!=='image'){
     const cols=(a.detail&&a.detail.colors||[]);
@@ -1520,9 +1531,24 @@ async function renderAssets(){
   grid.className='grid mood-grid';
   grid.innerHTML=roots.map(a=>collectionCardHtml(a,childCount, collectionCover(a.name, assets))).join('');
 }
-async function openAssetModal(existing, presetParent){
+async function openAssetModal(existing, presetParent, presetData){
   const isEdit=!!existing;
-  const a = existing || {id:uid(),projectId:state.assetProject,category:state.assetCat==='all'?'character':state.assetCat,name:'',parent:'',subType:'',images:[],purpose:'',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
+  const a = existing || {
+    id:uid(),
+    projectId:state.assetProject,
+    category: presetData?.category || (state.assetCat==='all'?'character':state.assetCat),
+    name: presetData?.name || '',
+    parent:'',
+    subType: presetData?.subType || '',
+    images:[],
+    purpose: presetData?.purpose || '',
+    tool: presetData?.tool || '',
+    genPrompt: presetData?.genPrompt || '',
+    callout:'',
+    tags: presetData?.tags || [],
+    detail:{},
+    createdAt:Date.now()
+  };
   if(presetParent && !existing) a.parent=presetParent; // 在某集内新建时自动归入该集
   const isCollection = !a.parent; // 根资产=集（简化）；有父级=子资产（详细）
   a.detail=a.detail||{};
@@ -1544,7 +1570,7 @@ async function openAssetModal(existing, presetParent){
   if(isCollection){
     body = `
       <div class="field"><label>集类型（只选大的分类，更细的类别进集后再划）</label>
-        <select id="am-cat">${ASSET_CATS.filter(c=>['character','scene','palette'].includes(c.id)).map(c=>`<option value="${c.id}" ${c.id===a.category?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
+        <select id="am-cat">${ASSET_CATS.map((c,i)=>`<option value="${c.id}" ${(c.id===a.category||(i===0 && !a.category))?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
         <div class="paste-hint" id="am-cat-hint"></div>
       </div>
       <div class="field"><label>集名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：女主·林晚 / 旧公寓 / 绿色包包"><datalist id="am-name-list"></datalist></div>
@@ -1556,23 +1582,33 @@ async function openAssetModal(existing, presetParent){
         <div class="sug" id="am-tag-sugs"></div>
       </div>
       <div class="field"><label>集设定 / 备注（概括这个集合：世界观、人物背景、统一风格等）</label><textarea id="am-notes" placeholder="如：林晚，22岁，冷感职场女性；整体走写实+冷色调；与旧公寓场景联动">${esc(a.detail.notes||'')}</textarea></div>
-      <div class="field"><label>从集内图片选封面</label><div id="am-cover-pick" class="am-images"></div></div>
+      <div class="field">${a.category==='prompt'?'':'<label>从集内图片选封面</label><div id="am-cover-pick" class="am-images"></div>'}</div>
     `;
   } else {
+    const isPrompt = parentCategory==='prompt';
     body = `
-      <div class="field"><label>子类型（${assetCatName(parentCategory)} 下的细分，如三视图 / 配饰）</label><input id="am-subtype" list="am-subtype-list" style="width:100%" value="${esc(a.subType||'')}" placeholder="如：三视图 / 配饰 / 多角度"><datalist id="am-subtype-list"></datalist></div>
-      <div class="field"><label>资产名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="如：林晚·三视图 / 旧公寓·全景"><datalist id="am-name-list"></datalist></div>
+      <div class="field"><label>子类型（${assetCatName(parentCategory)} 下的细分${isPrompt?'，如：通用增强 / 角色设定':'，如：三视图 / 配饰'}）</label><input id="am-subtype" list="am-subtype-list" style="width:100%" value="${esc(a.subType||'')}" placeholder="${isPrompt?'如：通用增强 / 角色设定':'如：三视图 / 配饰 / 多角度'}"><datalist id="am-subtype-list"></datalist>
+        <div class="sug" id="am-sub-history"></div>
+      </div>
+      <div class="field"><label>资产名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="${isPrompt?'如：通用增强模板':'如：林晚·三视图 / 旧公寓·全景'}"><datalist id="am-name-list"></datalist></div>
+      ${isPrompt ? `
+      <div class="field"><label>📝 提示词内容 <small style="color:var(--accent)">（主体，必填）</small></label>
+        <textarea id="am-gen" style="min-height:240px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;background:var(--bg2);border:1px solid var(--accent);border-radius:8px;padding:10px" placeholder="直接粘贴提示词，或从拼装台导出后保存到这里">${esc(a.genPrompt)}</textarea>
+        <div class="paste-hint">支持手写、粘贴、从拼装台导出（拼装台有「💾 存到提示词库」按钮）。</div>
+      </div>` : `
       <div class="field"><label>图片（可多张：四视图/多角度/宫格，支持上传/粘贴/网址）</label>
         <div id="am-images" class="am-images"></div>
         <div class="row"><input type="file" id="am-file" accept="image/*" multiple><input type="text" id="am-url" placeholder="图片网址…" style="flex:1"></div>
         <div class="paste-hint">在别处复制图片后，聚焦此窗口按 Ctrl+V 即可粘入。</div>
       </div>
-      <div class="field"><label>用途说明（这张资产是干什么的）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
+      <div class="field"><label>生成提示词（可选，方便复现）</label>
+        <textarea id="am-gen" placeholder="当时用的提示词…">${esc(a.genPrompt)}</textarea>
+      </div>`}
+      <div class="field"><label>用途说明（这个资产是干什么的）</label><textarea id="am-purpose" placeholder="例：用于保持脸部特征、发型、身材比例和整体气质一致">${esc(a.purpose)}</textarea>
         <div class="sug" id="am-purp-sugs"></div>
         <div class="sug-hint">点上面的建议可快速填入，也可自己写。</div>
       </div>
-      <div class="field"><label>生成工具 / 来源</label><input id="am-tool" list="am-tool-list" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图"><datalist id="am-tool-list"></datalist></div>
-      <div class="field"><label>生成提示词（可选，方便复现）</label><textarea id="am-gen" placeholder="当时用的提示词…">${esc(a.genPrompt)}</textarea></div>
+      <div class="field"><label>${isPrompt?'适用模型（可选）':'生成工具 / 来源'}</label><input id="am-tool" list="am-tool-list" style="width:100%" value="${esc(a.tool)}" placeholder="nanobanan pro / image2.0 / 参考图"><datalist id="am-tool-list"></datalist></div>
       <div id="am-detail">${paletteRowsHtml}</div>
       <div class="field"><label>调用标注（喂给视频模型时复制这段话）</label><textarea id="am-callout" placeholder="自动生成，可修改">${esc(a.callout)}</textarea>
         <button class="btn" id="am-gen-callout" style="margin-top:6px">↺ 按模板重新生成标注</button>
@@ -1667,6 +1703,24 @@ async function openAssetModal(existing, presetParent){
       inp.value=(inp.value.trim()?inp.value.trim()+' ':'')+ch.dataset.v;
     }));
   }
+  /* 子类型历史：从已有资产中收集当前父集类型下用过的子分类，按最近使用排序，点选填入 */
+  function renderSubtypeHistory(){
+    const c=document.getElementById('am-sub-history'); if(!c) return;
+    const all=allAssets||[];
+    const subs=[];
+    const seen=new Set();
+    const list=all.filter(x=>x.subType).filter(x=>{
+      if(!x.parent) return x.category===parentCategory; // 根资产直接按 category
+      const pa=all.find(p=>p.name===x.parent && !p.parent);
+      return pa && pa.category===parentCategory;
+    }).sort((a,b)=>b.createdAt-a.createdAt);
+    for(const x of list){ if(!seen.has(x.subType)){ seen.add(x.subType); subs.push(x.subType); } }
+    if(!subs.length){ c.innerHTML=''; return; }
+    c.innerHTML='<div class="sug-hint">最近使用过的子分类（点击填入）：</div>'+subs.slice(0,16).map(v=>`<span class="sug-chip" data-v="${esc(v)}">${esc(v)}</span>`).join('');
+    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',()=>{
+      const inp=document.getElementById('am-subtype'); if(inp) inp.value=ch.dataset.v;
+    }));
+  }
   function refreshSuggestions(){
     const cat=getCat();
     fillDatalist('am-tool-list',assetPresets.tools);
@@ -1675,6 +1729,7 @@ async function openAssetModal(existing, presetParent){
     if(document.getElementById('am-parent-list')) fillDatalist('am-parent-list',assetCharNames);
     renderTagSuggestions();
     renderPurposeSuggestions();
+    renderSubtypeHistory();
   }
   // 异步拉取已建人物名（仅子资产模式可能用到）
   getAll('assets').then(list=>{ assetCharNames=[...new Set(list.filter(x=>!x.parent&&x.name).map(x=>x.name))]; if(document.getElementById('am-parent-list'))fillDatalist('am-parent-list',assetCharNames); }).catch(()=>{});
@@ -1829,6 +1884,108 @@ async function seedAssetsIfEmpty(){
   await putOne('assets',char);
 }
 // 资产库事件绑定
+/* 管理集分类（顶部 tab 上的分类）：增/改/删/排序，持久化到 meta.assetCats */
+function openAssetCatEditor(){
+  const root=document.getElementById('modal-root');
+  const render=()=>{
+    root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(560px,100%);max-height:90vh;display:flex;flex-direction:column">
+      <h3>🗂 管理集分类 <small>顶部 tab 上的分类，可增 / 改名 / 删除 / 排序，自动保存</small></h3>
+      <div class="mtab" style="overflow-y:auto;padding-right:6px">
+        ${ASSET_CATS.map((c,i)=>`
+          <div class="cat-edit-row" data-i="${i}">
+            <input class="cat-icon" value="${esc(c.icon||'📁')}" maxlength="2" style="width:42px;text-align:center;font-size:18px">
+            <input class="cat-name" value="${esc(c.name)}" placeholder="分类名称" style="flex:1">
+            <button class="btn mini" data-act="up" ${i===0?'disabled':''}>↑</button>
+            <button class="btn mini" data-act="down" ${i===ASSET_CATS.length-1?'disabled':''}>↓</button>
+            <button class="btn mini danger" data-act="del">✕</button>
+          </div>`).join('')}
+        <button class="btn" id="ac-add" style="margin-top:10px">＋ 添加分类</button>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:10px">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn primary" id="ac-save">保存</button>
+      </div>
+    </div></div>`;
+    root.querySelector('.overlay').addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+    root.querySelectorAll('.cat-edit-row').forEach(row=>{
+      const i=+row.dataset.i;
+      row.querySelector('.cat-name').addEventListener('input',e=>ASSET_CATS[i].name=e.target.value);
+      row.querySelector('.cat-icon').addEventListener('input',e=>ASSET_CATS[i].icon=e.target.value);
+      row.querySelector('[data-act="up"]').addEventListener('click',()=>{if(i>0){[ASSET_CATS[i-1],ASSET_CATS[i]]=[ASSET_CATS[i],ASSET_CATS[i-1]];render();}});
+      row.querySelector('[data-act="down"]').addEventListener('click',()=>{if(i<ASSET_CATS.length-1){[ASSET_CATS[i+1],ASSET_CATS[i]]=[ASSET_CATS[i],ASSET_CATS[i+1]];render();}});
+      row.querySelector('[data-act="del"]').addEventListener('click',async()=>{
+        const cat=ASSET_CATS[i];
+        const all=await getAll('assets');
+        const n=all.filter(a=>a.category===cat.id).length;
+        if(n>0){ toast('无法删除「'+cat.name+'」：有 '+n+' 个资产属于该分类，请先处理这些资产'); return; }
+        ASSET_CATS.splice(i,1);render();
+      });
+    });
+    root.querySelector('#ac-add').addEventListener('click',()=>{
+      ASSET_CATS.push({id:'cat_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'新分类',icon:'📁',parent:'',hint:''});
+      render();
+    });
+    root.querySelector('#ac-save').addEventListener('click',async()=>{
+      if(ASSET_CATS.some(c=>!c.name.trim())){toast('分类名称不能为空');return;}
+      await saveAssetCats();
+      renderAssetCatTabs();renderAssets();populateAssetParents();
+      closeModal();toast('已保存集分类 ✓');
+    });
+  };
+  render();
+}
+/* 拼装台 → 提示词库：把当前拼装好的提示词存到资产库的「提示词」tab 下 */
+async function exportComposerToPrompt(){
+  const pos=document.getElementById('assembled').value.trim();
+  const neg=document.getElementById('assembled-neg').value.trim();
+  if(!pos && !neg){ toast('当前拼装台为空，没东西可保存'); return; }
+  const content=[pos, neg?'\n\nNegative:\n'+neg : ''].filter(Boolean).join('\n');
+  // 拉取所有提示词集
+  const all=await getAll('assets');
+  const promptCols=all.filter(a=>!a.parent && a.category==='prompt');
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(520px,100%);max-height:90vh;display:flex;flex-direction:column">
+    <h3>📝 存到提示词库 <small>把拼装好的提示词保存到提示词集的子资产里</small></h3>
+    <div class="mtab" style="overflow-y:auto;padding-right:6px">
+      <div class="field"><label>选择提示词集（或新建）</label>
+        <select id="exp-col" style="width:100%">
+          <option value="__new__">＋ 新建提示词集</option>
+          ${promptCols.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}${c.purpose?' · '+esc(c.purpose.slice(0,30)):''}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>提示词名称</label><input id="exp-name" style="width:100%" placeholder="如：通用增强模板"></div>
+      <div class="field"><label>子分类</label><input id="exp-sub" list="exp-sub-list" style="width:100%" placeholder="如：通用增强 / 角色设定"><datalist id="exp-sub-list">${(assetPresets.subtypes.prompt||[]).map(v=>`<option value="${esc(v)}">`).join('')}</datalist></div>
+      <div class="field"><label>内容预览</label><div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:160px;overflow-y:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap">${esc(content)}</div></div>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" id="exp-go">下一步 → 填写详情</button>
+    </div>
+  </div></div>`;
+  root.querySelector('.overlay').addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  document.getElementById('exp-go').addEventListener('click',async()=>{
+    const colSel=document.getElementById('exp-col').value;
+    const pname=document.getElementById('exp-name').value.trim();
+    const psub=document.getElementById('exp-sub').value.trim();
+    closeModal();
+    let collectionName=colSel;
+    if(colSel==='__new__'){
+      const newCol={id:uid(),projectId:state.assetProject,category:'prompt',name:'提示词集',parent:'',images:[],purpose:'从拼装台导入的提示词集合',tool:'',genPrompt:'',callout:'',tags:[],detail:{},createdAt:Date.now()};
+      await putOne('assets',newCol);
+      collectionName=newCol.name;
+      toast('已新建提示词集「'+collectionName+'」');
+    }
+    // 切换到资产库→提示词 tab→进入该集
+    setView('assets');
+    state.assetCat='prompt';
+    state.assetCollection=collectionName;
+    renderAssetCatTabs();
+    await populateProjects();
+    renderAssets();
+    // 打开子资产弹窗，预填内容
+    openAssetModal(null, collectionName, {category:'prompt', name:pname, subType:psub, genPrompt:content});
+  });
+}
 function openPresetManager(){
   const root=document.getElementById('modal-root');
   const flat=t=>(t||[]).join('\n');
@@ -1881,16 +2038,28 @@ async function openAssetView(id){
       stageHtml=`<div class="av-stage" style="padding:8px;background:var(--bg2)"><div style="display:flex;gap:3px;width:100%;height:100%">${strip}</div></div>`;
     }
     stageHtml+=`<div class="row" style="margin:8px 0;justify-content:center"><button class="btn" id="av-toggle">${(a.thumbMode||'palette')==='image'?'🎨 看色板':'🖼️ 看图片'}</button></div>`;
+  } else if(a.category==='prompt'){
+    // 提示词资产：文字为主，stage 显示完整内容
+    const txt=a.genPrompt||'（暂无内容）';
+    stageHtml=`<div class="av-stage" style="padding:20px;background:var(--bg2);align-items:flex-start;justify-content:flex-start;overflow-y:auto"><div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.75;color:var(--text);white-space:pre-wrap;text-align:left;width:100%">${esc(txt)}</div></div>`;
   } else {
     stageHtml = imgs.length?`<div class="av-stage"><img id="av-big" src="${firstU}" alt=""></div>`:`<div class="av-stage" style="color:#666;align-items:center">（该资产没有图片）</div>`;
   }
   const showThumbs = !isCol && imgs.length>1 && (a.category!=='palette' || (a.thumbMode||'palette')==='image');
   const thumbsHtml = showThumbs ? `<div class="av-thumbs">${imgs.map((im,i)=>`<img data-i="${i}" class="${i===0?'on':''}" src="${uOf(im)}">`).join('')}</div>` : '';
+  const isPromptAsset=!isCol && a.category==='prompt';
   const info = isCol ? [
     ['名称', a.name||'(未命名)'],
     ['集类型', assetCatName(a.category)],
     ['用途说明', a.purpose||'（未填）'],
     ['集设定 / 备注', (a.detail&&a.detail.notes)||'（未填）'],
+  ] : (isPromptAsset ? [
+    ['名称', a.name||'(未命名)'],
+    ['类型', assetCatName(a.category)],
+    ['子类型', a.subType||'—'],
+    ['所属集', a.parent||'—'],
+    ['用途说明', a.purpose||'（未填）'],
+    ['适用模型', a.tool||'（未填）'],
   ] : [
     ['名称', a.name||'(未命名)'],
     ['类型', assetCatName(a.category)],
@@ -1899,7 +2068,7 @@ async function openAssetView(id){
     ['用途说明', a.purpose||'（未填）'],
     ['生成工具', a.tool||'（未填）'],
     ['生成提示词', a.genPrompt||'（未填）'],
-  ];
+  ]);
   root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(880px,100%);max-height:92vh;display:flex;flex-direction:column">
     <h3>${esc(a.name||'资产')} <small>${assetCatName(a.category)}</small></h3>
     <div class="mtab" style="overflow-y:auto;padding-right:6px">
@@ -1932,6 +2101,7 @@ async function openAssetView(id){
   }));
   document.getElementById('av-edit').addEventListener('click',()=>{closeModal();openAssetModal(a);});
 }
+document.getElementById('asset-cats-edit').addEventListener('click',openAssetCatEditor);
 document.getElementById('asset-presets').addEventListener('click',openPresetManager);
 document.getElementById('asset-add').addEventListener('click',()=>{
   if(state.assetCollection) openAssetModal(null, state.assetCollection); // 集内→新建资产，默认归入当前集
@@ -2030,6 +2200,7 @@ async function initApp(){
   await seedAssetsIfEmpty();
   await cleanupOrphanAssets(); // 修好历史上已残留的孤儿（如曾删过又重建的同名集）
   await loadAssetPresets();
+  await loadAssetCats(); // 加载可编辑的集分类（meta.assetCats），必须在 renderAssetCatTabs 前
   await populateProjects();
   renderAssetCatTabs();
   setView('captures');
