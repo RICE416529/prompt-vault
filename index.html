@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17o';
+    var PAGE_VER='2026-08-17p';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -473,7 +473,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17o';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17p';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1484,6 +1484,13 @@ async function populateAssetParents(){
 }
 function renderAssetCatTabs(){
   const el=document.getElementById('asset-cat-tabs');
+  // 集内视图：完全隐藏顶部大类 tab，只保留集内的 subtype-nav
+  // 这样“管理集分类”改只影响“建集弹窗的分类下拉”和“总览页 tab”，和集内相关的分类标策完全部存在每个集根资产自己的 subTypes[]里
+  if(state.assetCollection){
+    el.style.display='none';
+    return;
+  }
+  el.style.display='';
   el.innerHTML=`<button class="cat-tab ${state.assetCat==='all'?'active':''}" data-cat="all">全部</button>`+
     ASSET_CATS.map(c=>`<button class="cat-tab ${state.assetCat===c.id?'active':''}" data-cat="${c.id}">${c.icon} ${c.name}</button>`).join('');
 }
