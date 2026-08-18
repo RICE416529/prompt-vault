@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17l';
+    var PAGE_VER='2026-08-17m';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -208,9 +208,11 @@
   .asset-card .body .prompt-snippet{border:0;padding:0}
   /* 预选项：输入建议 */
   .sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-  .sug-chip{background:var(--chip);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:3px 9px;border-radius:14px;cursor:pointer;user-select:none}
+  .sug-chip{background:var(--chip);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:3px 9px;border-radius:14px;cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:4px}
   .sug-chip:hover{border-color:var(--accent);color:var(--text)}
   .sug-chip.on{border-color:var(--accent);color:#fff;background:#2a1620}
+  .sug-chip .chip-x{font-size:10px;opacity:.4;background:transparent;border:0;color:inherit;cursor:pointer;padding:0 0 0 2px;line-height:1}
+  .sug-chip .chip-x:hover{opacity:1;color:var(--accent)}
   .sug-hint{font-size:11px;color:#777;margin-top:4px}
   /* 资产库：层级集 / 画板 / 展示视图 */
   .crumb{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
@@ -234,6 +236,34 @@
   .m-body .actions .btn{padding:3px 9px;font-size:11px}
   .badge.set{background:#10221c;border-color:#3fae8e;color:#5fe3b6}
   .badge.sub{background:#1c1430;border-color:#7c5cff;color:#b9a6ff}
+  /* 横条卡（提示词集等） */
+  .mood-card.wide{flex-direction:row;align-items:stretch}
+  .mood-card.wide .m-thumb{height:auto;width:280px;flex:0 0 280px;max-height:140px}
+  .mood-card.wide .m-body{padding:10px 14px}
+  .mood-card.wide .m-name{font-size:14px}
+  /* 拖拽 */
+  .mood-card[draggable="true"]{cursor:grab}
+  .mood-card.dragging{opacity:.35;transform:scale(.98)}
+  .mood-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+  /* 小类导航条 */
+  .subtype-nav{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 4px;margin-bottom:12px;border-bottom:1px dashed var(--border)}
+  .subtype-nav .nav-title{font-size:12px;color:var(--muted);margin-right:4px}
+  .subtype-nav .sub-chip{font-size:11px;padding:3px 10px;border-radius:14px;cursor:pointer;border:1px solid var(--border);background:var(--chip);display:inline-flex;align-items:center;gap:5px;color:var(--text)}
+  .subtype-nav .sub-chip .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+  .subtype-nav .sub-chip.active{border-color:var(--accent);background:#2a1620}
+  .subtype-nav .sort-sel{margin-left:auto;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:12px}
+  /* 小类标签带 hash 颜色 */
+  .badge.subtype{background:#1c1430}
+  /* 提示词文本预览行高更紧凑 */
+  .prompt-preview{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;overflow:hidden;text-align:left;color:var(--text)}
+  /* 黑底白字封面（提示词集无图时） */
+  .name-cover{display:flex;align-items:center;justify-content:center;width:100%;height:100%;background:#000;color:#fff;font-size:18px;font-weight:600;letter-spacing:.5px;text-align:center;padding:10px;line-height:1.35;word-break:break-word}
+  .name-cover.small{font-size:13px;padding:8px}
+  /* 内联 chip 编辑器（创建/编辑页内直接增/删/改） */
+  .tag-editor{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;padding:8px;border:1px dashed var(--border);border-radius:8px;align-items:center}
+  .tag-editor .sug-chip{cursor:pointer}
+  .tag-editor input.add-tag{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:14px;padding:3px 10px;font-size:11px;width:140px}
+  .tag-editor .ed-label{font-size:11px;color:var(--muted);width:100%;margin-bottom:2px}
   .set-head{display:flex;gap:14px;align-items:center;background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:6px}
   .set-head .sh-thumb{width:118px;height:118px;flex-shrink:0;background:#000;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
   .set-head .sh-thumb img{width:100%;height:100%;object-fit:cover}
@@ -426,7 +456,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17l';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17m';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -459,7 +489,7 @@ console.log('[VaultStudio]', APP_VER);
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 /* ============ 状态 ============ */
-const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'', assetProject:'', assetCat:'all', assetParent:'', assetCollection:'' };
+const state = { view:'captures', highlightId:null, draft:[], activeCat:'all', blkSearch:'', assetProject:'', assetCat:'all', assetParent:'', assetCollection:'', assetSort:'order' };
 let mediaUrls = [];
 let composerMap = {};
 function revokeMedia(){ mediaUrls.forEach(u=>URL.revokeObjectURL(u)); mediaUrls=[]; }
@@ -1430,10 +1460,16 @@ function renderAssetCatTabs(){
 }
 /* 缩略图：集封面 / 画板卡片通用 */
 function assetThumbHtml(a){
-  // 提示词资产：显示文本预览
+  // 提示词资产：根（集）无图时显示「黑底白字 + 集名」封面；子资产显示文本预览
   if(a.category==='prompt'){
+    if(!a.parent){
+      // 根（集）——无图时用「黑底白字」+ 集名 当封面
+      const txt=a.genPrompt||a.name||'(未命名)';
+      const preview=txt?`<div class="prompt-preview" style="display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical">${esc(txt.slice(0,200))}</div>`:'<div class="ph">暂无内容</div>';
+      return `<div class="m-thumb prompt-thumb" style="padding:14px;background:#000;align-items:center;justify-content:center"><div class="name-cover">${esc(a.name||'(未命名)')}</div></div>`;
+    }
     const txt=(a.genPrompt||'').slice(0,200);
-    const preview=txt?`<div style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.55;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;text-align:left">${esc(txt)}</div>`:'<div class="ph">暂无内容</div>';
+    const preview=txt?`<div class="prompt-preview" style="display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical">${esc(txt)}</div>`:'<div class="ph">暂无内容</div>';
     return `<div class="m-thumb prompt-thumb" style="padding:10px;background:var(--bg2);align-items:flex-start;justify-content:flex-start;overflow:hidden">${preview}</div>`;
   }
   // 色板资产：可按 thumbMode 在「色板条」与「上传图片」之间切换显示封面
@@ -1470,12 +1506,30 @@ function collectionCardHtml(a,cnt,coverUrl){
       </div>
     </div></div>`;
 }
-function moodCardHtml(a){
-  const badges=`<span class="badge">${assetCatName(a.category)}</span>${a.subType?`<span class="badge sub">${esc(a.subType)}</span>`:''}${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
+/* 小类颜色：hash → HSL 稳定颜色，用户可在 ⚙ 预选项 里覆盖（保存到 assetPresets.subtypeColors） */
+function subTypeColor(name){
+  if(!name) return 'var(--muted)';
+  if(!assetPresets.subtypeColors) assetPresets.subtypeColors={};
+  const ov=assetPresets.subtypeColors[name];
+  if(ov) return ov;
+  let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xffff;
+  const hue=h%360;
+  return 'hsl('+hue+', 65%, 60%)';
+}
+function moodCardHtml(a, opts){
+  opts=opts||{};
+  const inCollection=!!opts.inCollection; // 在集内视图时，隐藏大类/所属集标签
+  const subColor=a.subType?subTypeColor(a.subType):'var(--muted)';
+  // 集内视图：只显示「小类」标签（带 hash 颜色），隐藏「大类」「所属集」
+  const badges = inCollection
+    ? `${a.subType?`<span class="badge subtype" style="color:${subColor};border-color:${subColor}">${esc(a.subType)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`
+    : `<span class="badge">${assetCatName(a.category)}</span>${a.subType?`<span class="badge subtype" style="color:${subColor};border-color:${subColor}">${esc(a.subType)}</span>`:''}${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
   // 色板资产且有图：右上角放「色板 / 图片」切换按钮
   const canToggle = a.category==='palette' && a.images && a.images.length;
   const toggle = canToggle ? `<button class="thumb-toggle" data-toggle="${a.id}" title="切换 色板 / 图片 封面">${(a.thumbMode||'palette')==='image'?'🎨 色板':'🖼️ 图片'}</button>` : '';
-  return `<div class="mood-card" data-aid="${a.id}">
+  // 提示词集（父级是 prompt）的子资产：横条布局
+  const wide = inCollection && (function(){ const pcol=(opts.parentCategory||''); return pcol==='prompt'; })();
+  return `<div class="mood-card ${wide?'wide':''}" data-aid="${a.id}" draggable="${inCollection?'true':'false'}">
     <div style="position:relative">
       ${assetThumbHtml(a)}
       ${toggle}
@@ -1483,6 +1537,7 @@ function moodCardHtml(a){
     <div class="m-body">
       <div class="m-badges">${badges}</div>
       <div class="m-name">${esc(a.name||'(未命名)')}</div>
+      ${inCollection && a.category==='prompt' ? `<div style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.4;max-height:36px;overflow:hidden">${a.genPromptTr?`<span style="color:var(--accent2);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;display:block;margin-bottom:2px">${esc((a.genPromptTr||'').slice(0,80))}${(a.genPromptTr||'').length>80?'…':''}</span>`:''}<span style="font-family:ui-monospace,Menlo,Consolas,monospace\">${esc((a.genPrompt||'').slice(0,80))}${(a.genPrompt||'').length>80?'…':''}</span></div>` : ''}
     </div></div>`;
 }
 async function renderAssets(){
@@ -1493,24 +1548,52 @@ async function renderAssets(){
   if(state.assetProject) assets=assets.filter(a=>a.projectId===state.assetProject);
   const q=(document.getElementById('asset-search').value||'').toLowerCase();
 
-  // ===== 集内视图：画板式紧凑展示 =====
+  // ===== 集内视图：画板式紧凑展示 + 小类导航条 + 拖拽排序 =====
   if(state.assetCollection){
     const root=assets.find(a=>a.name===state.assetCollection && !a.parent);
+    const parentCategory=root?root.category:'';
     crumb.hidden=false;
     document.getElementById('asset-add').textContent='＋ 新建资产';
     crumb.innerHTML=`<button class="btn" id="crumb-back">← 全部集</button><span class="crumb-name">${esc(state.assetCollection)}</span>`;
     let children=assets.filter(a=>(a.parent||'')===state.assetCollection);
     if(q) children=children.filter(a=>(a.name+' '+(a.purpose||'')+' '+((a.tags||[]).join(' '))).toLowerCase().includes(q));
-    children.sort((a,b)=>b.createdAt-a.createdAt);
-    let html=`<div class="set-label">子资产（画板）· ${children.length} 个</div>`;
+    // 排序：自定义顺序（拖拽后的 order 字段）→ 颜色 → 名字 → 时间
+    const sortBy=state.assetSort||'order';
+    children.sort((a,b)=>{
+      if(sortBy==='order'){
+        const oa=a.order||0, ob=b.order||0;
+        if(oa!==ob) return ob-oa; // 新的在前
+        return b.createdAt-a.createdAt;
+      }
+      if(sortBy==='name') return (a.name||'').localeCompare(b.name||'','zh');
+      if(sortBy==='color') return subTypeColor(a.subType||'').localeCompare(subTypeColor(b.subType||''));
+      return b.createdAt-a.createdAt;
+    });
+    // 小类导航条：收集当前集用过的所有 subType + 颜色，按使用次数排序
+    const subFreq={}; children.forEach(c=>{ if(c.subType) subFreq[c.subType]=(subFreq[c.subType]||0)+1; });
+    const subs=Object.keys(subFreq).sort((a,b)=>subFreq[b]-subFreq[a]);
+    let navHtml='<div class="subtype-nav">';
+    navHtml+=`<span class="nav-title">小类</span>`;
+    navHtml+=subs.map(s=>{
+      const col=subTypeColor(s);
+      return `<span class="sub-chip" data-sub="${esc(s)}"><span class="dot" style="background:${col}"></span>${esc(s)} <span style="opacity:.6;font-size:10px">(${subFreq[s]})</span></span>`;
+    }).join('');
+    navHtml+=`<select class="sort-sel" id="asset-sort-sel" title="排序方式"><option value="order" ${sortBy==='order'?'selected':''}>↕ 自定义（拖拽）</option><option value="time" ${sortBy==='time'?'selected':''}>⏱ 时间</option><option value="name" ${sortBy==='name'?'selected':''}>A 按名字</option><option value="color" ${sortBy==='color'?'selected':''}>🎨 按颜色</option></select>`;
+    navHtml+='</div>';
+    let html=`<div class="set-label">子资产（${children.length} 个）</div>${navHtml}`;
     if(!children.length){
       html+=`<div class="empty">这个集里还没有子资产。点「＋ 新建资产」，它会自动归入「${esc(state.assetCollection)}」。</div>`;
     } else {
-      html+=`<div class="grid mood-grid">${children.map(moodCardHtml).join('')}</div>`;
+      html+=`<div class="grid mood-grid" id="mood-grid">${children.map(a=>moodCardHtml(a,{inCollection:true,parentCategory})).join('')}</div>`;
     }
     grid.className='';
     grid.innerHTML=html;
     document.getElementById('crumb-back').addEventListener('click',()=>{state.assetCollection='';renderAssetCatTabs();renderAssets();});
+    // 排序下拉
+    const sortSel=document.getElementById('asset-sort-sel');
+    if(sortSel) sortSel.addEventListener('change',e=>{state.assetSort=e.target.value;renderAssets();});
+    // 拖拽排序（仅「order」排序时启用）
+    if(sortBy==='order') attachDragSort();
     return;
   }
 
@@ -1530,6 +1613,38 @@ async function renderAssets(){
   }
   grid.className='grid mood-grid';
   grid.innerHTML=roots.map(a=>collectionCardHtml(a,childCount, collectionCover(a.name, assets))).join('');
+}
+/* HTML5 拖拽排序：把 mood-grid 内卡片按拖动后的顺序写回 order 字段（拖到前面 = 较大 order） */
+function attachDragSort(){
+  const grid=document.getElementById('mood-grid'); if(!grid) return;
+  const cards=[...grid.querySelectorAll('.mood-card')];
+  let dragId=null;
+  cards.forEach(c=>{
+    c.addEventListener('dragstart',e=>{
+      dragId=c.dataset.aid;
+      c.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      try{ e.dataTransfer.setData('text/plain', dragId); }catch(_){}
+    });
+    c.addEventListener('dragend',()=>{ c.classList.remove('dragging'); cards.forEach(x=>x.classList.remove('drag-over')); dragId=null; });
+    c.addEventListener('dragover',e=>{ e.preventDefault(); if(dragId && c.dataset.aid!==dragId) c.classList.add('drag-over'); });
+    c.addEventListener('dragleave',()=>c.classList.remove('drag-over'));
+    c.addEventListener('drop',async e=>{
+      e.preventDefault(); c.classList.remove('drag-over');
+      if(!dragId || c.dataset.aid===dragId) return;
+      // 把 dragId 的卡片移到 c 之前
+      const src=grid.querySelector(`.mood-card[data-aid="${dragId}"]`);
+      if(src && c && src!==c){ grid.insertBefore(src, c); }
+      // 收集 DOM 顺序，重写 order（越大越前）
+      const ids=[...grid.querySelectorAll('.mood-card')].map(x=>x.dataset.aid);
+      try{
+        for(let i=0;i<ids.length;i++){
+          const a=await getOne('assets',ids[i]); if(a){ a.order=ids.length-i; await putOne('assets',a); }
+        }
+      }catch(err){ console.warn('persist order failed',err); }
+      toast('已更新排序 ✓');
+    });
+  });
 }
 async function openAssetModal(existing, presetParent, presetData){
   const isEdit=!!existing;
@@ -1579,7 +1694,11 @@ async function openAssetModal(existing, presetParent, presetData){
         <div class="sug-hint">点上面的建议可快速填入，也可自己写。</div>
       </div>
       <div class="field"><label>集标签（逗号分隔，也可点下方建议）</label><input id="am-tags" style="width:100%" value="${esc((a.tags||[]).join(', '))}">
-        <div class="sug" id="am-tag-sugs"></div>
+        <div class="tag-editor" id="am-tag-editor">
+          <span class="ed-label">💡 直接在这里增/删标签（点 ✕ 删除，点 chip 选中；新输入回车添加为预选项）</span>
+          <div class="sug" id="am-tag-sugs"></div>
+          <input class="add-tag" id="am-tag-add" placeholder="＋ 新增标签后回车">
+        </div>
       </div>
       <div class="field"><label>集设定 / 备注（概括这个集合：世界观、人物背景、统一风格等）</label><textarea id="am-notes" placeholder="如：林晚，22岁，冷感职场女性；整体走写实+冷色调；与旧公寓场景联动">${esc(a.detail.notes||'')}</textarea></div>
       <div class="field">${a.category==='prompt'?'':'<label>从集内图片选封面</label><div id="am-cover-pick" class="am-images"></div>'}</div>
@@ -1588,7 +1707,11 @@ async function openAssetModal(existing, presetParent, presetData){
     const isPrompt = parentCategory==='prompt';
     body = `
       <div class="field"><label>子类型（${assetCatName(parentCategory)} 下的细分${isPrompt?'，如：通用增强 / 角色设定':'，如：三视图 / 配饰'}）</label><input id="am-subtype" list="am-subtype-list" style="width:100%" value="${esc(a.subType||'')}" placeholder="${isPrompt?'如：通用增强 / 角色设定':'如：三视图 / 配饰 / 多角度'}"><datalist id="am-subtype-list"></datalist>
-        <div class="sug" id="am-sub-history"></div>
+        <div class="tag-editor" id="am-sub-editor">
+          <span class="ed-label">💡 直接在这里增/删子类型（点 ✕ 删除，点 chip 填入；新输入回车保存为预选项）</span>
+          <div class="sug" id="am-sub-history"></div>
+          <input class="add-tag" id="am-sub-add" placeholder="＋ 新增子类型后回车">
+        </div>
       </div>
       <div class="field"><label>资产名称</label><input id="am-name" list="am-name-list" style="width:100%" value="${esc(a.name)}" placeholder="${isPrompt?'如：通用增强模板':'如：林晚·三视图 / 旧公寓·全景'}"><datalist id="am-name-list"></datalist></div>
       ${isPrompt ? `
@@ -1685,14 +1808,42 @@ async function openAssetModal(existing, presetParent, presetData){
   function renderTagSuggestions(){
     const c=document.getElementById('am-tag-sugs'); if(!c)return;
     const cur=()=>document.getElementById('am-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
-    c.innerHTML=(assetPresets.tags||[]).map(v=>`<span class="sug-chip" data-v="${esc(v)}">${esc(v)}</span>`).join('');
-    function sync(){const set=new Set(cur());c.querySelectorAll('.sug-chip').forEach(ch=>ch.classList.toggle('on',set.has(ch.dataset.v)));}
-    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',()=>{
-      const v=ch.dataset.v; let arr=cur();
-      if(arr.includes(v)) arr=arr.filter(x=>x!==v); else arr.push(v);
-      document.getElementById('am-tags').value=arr.join(', '); sync();
-    }));
-    sync();
+    const draw=()=>{
+      c.innerHTML=(assetPresets.tags||[]).map(v=>`<span class="sug-chip ${new Set(cur()).has(v)?'on':''}" data-v="${esc(v)}">${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="从预选项移除">✕</button></span>`).join('');
+      c.querySelectorAll('.sug-chip').forEach(ch=>{
+        ch.addEventListener('click',e=>{
+          if(e.target.classList.contains('chip-x')) return; // ✕ 单独处理
+          const v=ch.dataset.v; let arr=cur();
+          if(arr.includes(v)) arr=arr.filter(x=>x!==v); else arr.push(v);
+          document.getElementById('am-tags').value=arr.join(', '); draw();
+        });
+      });
+      c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+        e.stopPropagation();
+        const v=x.dataset.x;
+        assetPresets.tags=assetPresets.tags.filter(t=>t!==v);
+        // 同时从当前输入框移除
+        document.getElementById('am-tags').value=cur().filter(t=>t!==v).join(', ');
+        draw();
+      }));
+    };
+    draw();
+    // 新增标签回车
+    const addInp=document.getElementById('am-tag-add');
+    if(addInp && !addInp._wired){
+      addInp._wired=true;
+      addInp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const v=addInp.value.trim(); if(!v) return;
+          if(!assetPresets.tags.includes(v)) assetPresets.tags.push(v);
+          // 自动加入当前输入框
+          const arr=cur(); if(!arr.includes(v)) arr.push(v);
+          document.getElementById('am-tags').value=arr.join(', ');
+          addInp.value=''; draw();
+        }
+      });
+    }
   }
   function renderPurposeSuggestions(){
     const c=document.getElementById('am-purp-sugs'); if(!c)return;
@@ -1703,23 +1854,60 @@ async function openAssetModal(existing, presetParent, presetData){
       inp.value=(inp.value.trim()?inp.value.trim()+' ':'')+ch.dataset.v;
     }));
   }
-  /* 子类型历史：从已有资产中收集当前父集类型下用过的子分类，按最近使用排序，点选填入 */
+  /* 子类型历史 + 预选项合并：从「预选项」+「历史」两个来源，按预设顺序+最近使用合并去重，点选填入 */
   function renderSubtypeHistory(){
     const c=document.getElementById('am-sub-history'); if(!c) return;
     const all=allAssets||[];
-    const subs=[];
+    // 1) 预选项
+    const presetList=assetPresets.subtypes[parentCategory]||[];
+    // 2) 历史：当前父集类型下用过的
+    const hist=[];
     const seen=new Set();
     const list=all.filter(x=>x.subType).filter(x=>{
-      if(!x.parent) return x.category===parentCategory; // 根资产直接按 category
+      if(!x.parent) return x.category===parentCategory;
       const pa=all.find(p=>p.name===x.parent && !p.parent);
       return pa && pa.category===parentCategory;
     }).sort((a,b)=>b.createdAt-a.createdAt);
-    for(const x of list){ if(!seen.has(x.subType)){ seen.add(x.subType); subs.push(x.subType); } }
-    if(!subs.length){ c.innerHTML=''; return; }
-    c.innerHTML='<div class="sug-hint">最近使用过的子分类（点击填入）：</div>'+subs.slice(0,16).map(v=>`<span class="sug-chip" data-v="${esc(v)}">${esc(v)}</span>`).join('');
-    c.querySelectorAll('.sug-chip').forEach(ch=>ch.addEventListener('click',()=>{
-      const inp=document.getElementById('am-subtype'); if(inp) inp.value=ch.dataset.v;
+    for(const x of list){ if(!seen.has(x.subType)){ seen.add(x.subType); hist.push(x.subType); } }
+    // 合并：预设在前，历史在后（去重）
+    const merged=[...presetList, ...hist.filter(v=>!presetList.includes(v))];
+    if(!merged.length){ c.innerHTML=''; return; }
+    const cur=(document.getElementById('am-subtype')||{}).value||'';
+    c.innerHTML=merged.map(v=>{
+      const col=subTypeColor(v);
+      const on=v===cur;
+      return `<span class="sug-chip ${on?'on':''}" data-v="${esc(v)}" style="color:${col};border-color:${col}"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;margin-right:4px"></span>${esc(v)}<button class="chip-x" data-x="${esc(v)}" title="从预选项移除">✕</button></span>`;
+    }).join('');
+    c.querySelectorAll('.sug-chip').forEach(ch=>{
+      ch.addEventListener('click',e=>{
+        if(e.target.classList.contains('chip-x')) return;
+        const inp=document.getElementById('am-subtype'); if(inp){ inp.value=ch.dataset.v; renderSubtypeHistory(); }
+      });
+    });
+    c.querySelectorAll('.chip-x').forEach(x=>x.addEventListener('click',e=>{
+      e.stopPropagation();
+      const v=x.dataset.x;
+      if(assetPresets.subtypes[parentCategory]){
+        assetPresets.subtypes[parentCategory]=assetPresets.subtypes[parentCategory].filter(t=>t!==v);
+      }
+      if(assetPresets.subtypeColors && assetPresets.subtypeColors[v]) delete assetPresets.subtypeColors[v];
+      renderSubtypeHistory();
     }));
+    // 新增子类型回车
+    const addInp=document.getElementById('am-sub-add');
+    if(addInp && !addInp._wired){
+      addInp._wired=true;
+      addInp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const v=addInp.value.trim(); if(!v) return;
+          assetPresets.subtypes[parentCategory]=assetPresets.subtypes[parentCategory]||[];
+          if(!assetPresets.subtypes[parentCategory].includes(v)) assetPresets.subtypes[parentCategory].push(v);
+          document.getElementById('am-subtype').value=v;
+          addInp.value=''; renderSubtypeHistory();
+        }
+      });
+    }
   }
   function refreshSuggestions(){
     const cat=getCat();
@@ -1819,12 +2007,38 @@ async function openAssetModal(existing, presetParent, presetData){
       a.tags=document.getElementById('am-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
       a.images=images.map(im=>({blob:im.blob||null,url:im.url||null,caption:im.caption||''}));
       a.projectId=state.assetProject;
+      // 提示词资产：保存后异步自动中英互译，原文存 genPrompt，译文存 genPromptTr
+      if(!isCollection && parentCategory==='prompt' && a.genPrompt){
+        try{
+          const from=/[一-鿿]/.test(a.genPrompt)?'zh':'en';
+          const to=from==='zh'?'en':'zh';
+          // 不阻塞保存：先保存原文，再异步翻译；翻译完更新一次
+          a.genPromptLang=from; a.genPromptTr='';
+        }catch(_){}
+      }
       await putOne('assets',a);
       if(!isCollection && a.tool && !assetPresets.tools.includes(a.tool)){assetPresets.tools.push(a.tool);}
       (a.tags||[]).forEach(t=>{if(t && !assetPresets.tags.includes(t))assetPresets.tags.push(t);});
+      // 子类型：把当前子类型并入预选项
+      if(!isCollection && a.subType){
+        assetPresets.subtypes[parentCategory]=assetPresets.subtypes[parentCategory]||[];
+        if(!assetPresets.subtypes[parentCategory].includes(a.subType)) assetPresets.subtypes[parentCategory].push(a.subType);
+      }
       await saveAssetPresets();
       closeModal();toast(isEdit?'已保存修改 ✓':'已创建'+(isCollection?'集 ✓':'资产 ✓'));
       renderAssets();populateAssetParents();
+      // 提示词资产：保存后异步翻译（中文→英文 / 英文→中文），译文写回 genPromptTr
+      if(!isCollection && parentCategory==='prompt' && a.genPrompt && a.genPromptLang){
+        const from=a.genPromptLang, to=from==='zh'?'en':'zh';
+        translateText(a.genPrompt, from, to).then(async tr=>{
+          try{
+            const fresh=await getOne('assets',a.id); if(!fresh) return;
+            fresh.genPromptTr=tr; await putOne('assets',fresh);
+            // 若该视图还在原地，自动重渲染一次让卡片显示译文
+            if(state.assetCollection) renderAssets();
+          }catch(_){}
+        }).catch(()=>{/* 翻译失败静默 */});
+      }
     }catch(err){ console.error('save asset failed:',err); toast('保存失败：'+(err&&err.message||err)); }
   });
 }
