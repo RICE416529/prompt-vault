@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17q';
+    var PAGE_VER='2026-08-17r';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -420,6 +420,7 @@
     <div class="toolbar">
       <select id="asset-project" title="选择项目 / 影片"></select>
       <button class="btn" id="asset-new-project">＋ 项目</button>
+    <button class="btn danger" id="asset-del-project" title="删除当前选中的项目">🗑 删除</button>
       <select id="asset-parent" hidden><option value="">全部角色</option></select>
       <div class="spacer"></div>
       <button class="btn" id="asset-cats-edit" title="管理顶部 tab 上的集分类（增/改/删/排序）">🗂 分类</button>
@@ -473,7 +474,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17q';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17r';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1486,10 +1487,13 @@ function renderAssetCatTabs(){
   const el=document.getElementById('asset-cat-tabs');
   // 集内视图：完全隐藏顶部大类 tab，只保留集内的 subtype-nav
   // 这样“管理集分类”改只影响“建集弹窗的分类下拉”和“总览页 tab”，和集内相关的分类标策完全部存在每个集根资产自己的 subTypes[]里
+  const ce=document.getElementById('asset-cats-edit'); // 集内视图隐藏「🗂 分类」按钮（集里用不上，分类只在外面管）
   if(state.assetCollection){
     el.style.display='none';
+    if(ce) ce.style.display='none';
     return;
   }
+  if(ce) ce.style.display='';
   el.style.display='';
   el.innerHTML=`<button class="cat-tab ${state.assetCat==='all'?'active':''}" data-cat="all">全部</button>`+
     ASSET_CATS.map(c=>`<button class="cat-tab ${state.assetCat===c.id?'active':''}" data-cat="${c.id}">${c.icon} ${c.name}</button>`).join('');
@@ -2560,6 +2564,19 @@ document.getElementById('asset-add').addEventListener('click',()=>{
 });
 document.getElementById('asset-export').addEventListener('click',openExportBriefing);
 document.getElementById('asset-new-project').addEventListener('click',openNewProjectModal);
+document.getElementById('asset-del-project').addEventListener('click',async()=>{
+  const sel=document.getElementById('asset-project'); const id=sel.value;
+  if(!id){ toast('请先在左侧项目栏选择一个要删除的项目'); return; }
+  const projects=await getAll('projects'); const p=projects.find(x=>x.id===id);
+  if(!p){ toast('项目不存在'); return; }
+  if(!confirm('确定删除项目「'+(p.name||'未命名')+'」？\n该项目下的资产不会被删除，会自动归入「全部项目」。')) return;
+  await delOne('projects',id);
+  const assets=await getAll('assets');
+  for(const a of assets.filter(x=>x.projectId===id)){ a.projectId=''; await putOne('assets',a); }
+  state.assetProject='';
+  await populateProjects(); renderAssets();
+  toast('已删除项目「'+(p.name||'未命名')+'」');
+});
 document.getElementById('asset-project').addEventListener('change',e=>{state.assetProject=e.target.value;state.assetParent='';state.assetCollection='';populateAssetParents();renderAssets();});
 document.getElementById('asset-parent').addEventListener('change',e=>{state.assetParent=e.target.value;renderAssets();});
 document.getElementById('asset-search').addEventListener('input',renderAssets);
