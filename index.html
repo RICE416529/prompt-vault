@@ -13,7 +13,7 @@
 // index.html）；加载后清掉临时参数，地址栏保持干净。这样“直接输网址”也会自动更新。
 (function(){
   try{
-    var PAGE_VER='2026-08-17p';
+    var PAGE_VER='2026-08-17q';
     if(location.search.indexOf('_=')>=0){ history.replaceState(null,'',location.pathname); }
     function check(){
       fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){
@@ -473,7 +473,7 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17p';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17q';
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -1629,6 +1629,7 @@ function moodRowBodyHtml(a, opts){
 
 async function renderAssets(){
   revokeAssetMedia();
+  renderAssetCatTabs();
   const grid=document.getElementById('asset-grid');
   const crumb=document.getElementById('asset-crumb');
   let assets=await getAll('assets');
