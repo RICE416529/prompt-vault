@@ -321,6 +321,7 @@
     <span class="nav-sep"></span>
     <button class="tab" data-view="assets">🎬 资产库</button>
     <button class="tab" data-view="data">💾 数据</button>
+    <button class="tab" data-view="roughcut">✂️ 粗剪</button>
   </div>
 </header>
 <main>
@@ -410,6 +411,14 @@
       <button class="btn danger" id="clear-btn">🗑 清空全部数据</button>
     </div>
     <p class="meta">所有数据（含图片/视频）仅保存在你本地浏览器的 IndexedDB 中，不上传任何服务器。建议定期导出备份。</p>
+    <h3 style="margin-top:24px">本地文件夹（文件存储）</h3>
+    <div class="meta">把数据导出为真实文件，方便在资源管理器里直接查看 / 备份。选好「库根」后，点「打开文件夹」即可在资源管理器中打开该目录。<br><b>当前为导出快照</b>：软件内改动暂不会自动同步到文件夹，实时文件存储即将上线。</div>
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn" id="vault-pick">📂 选择库根并导出</button>
+      <button class="btn" id="vault-open">📂 打开库文件夹</button>
+      <button class="btn" id="vault-reexport">🔄 重新导出</button>
+    </div>
+    <div class="meta" id="vault-root-path"></div>
   </section>
 
   <!-- 图库 -->
@@ -446,6 +455,47 @@
     </div>
     <div id="asset-crumb" hidden></div>
     <div class="grid" id="asset-grid"></div>
+  </section>
+  <!-- 粗剪 -->
+  <section id="view-roughcut" hidden>
+    <div class="toolbar">
+      <button class="btn" id="rc-file-btn">📂 选择视频文件</button>
+      <select id="rc-asset-select" class="meta" style="min-width:200px"></select>
+      <div class="spacer"></div>
+      <span class="meta" id="rc-src-name"></span>
+    </div>
+    <input type="file" id="rc-file" accept="video/*" hidden>
+    <div class="roughcut-layout" style="display:flex;gap:18px;align-items:flex-start;margin-top:14px">
+      <div class="rc-left" style="flex:1;min-width:0">
+        <video id="rc-video" controls style="width:100%;background:#000;border-radius:8px;max-height:60vh"></video>
+        <div class="rc-timeline" style="margin-top:12px">
+          <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="meta">入点</span><input id="rc-in" readonly style="width:92px">
+            <button class="btn" id="rc-set-in">设入点</button>
+            <span class="meta">出点</span><input id="rc-out" readonly style="width:92px">
+            <button class="btn" id="rc-set-out">设出点</button>
+            <button class="btn" id="rc-clear">清除</button>
+            <span class="meta" id="rc-dur"></span>
+          </div>
+          <div class="meta" id="rc-preview" style="margin-top:6px"></div>
+        </div>
+      </div>
+      <div class="rc-right" style="width:320px;flex:none">
+        <h4 style="margin:4px 0 8px">裁切设置</h4>
+        <div class="field"><label>输出文件名</label><input id="rc-out-name" placeholder="留空=源名_片段" style="width:100%"></div>
+        <div class="field"><label>模式</label>
+          <label class="meta" style="display:block"><input type="radio" name="rc-mode" value="fast" checked> 快速（流拷贝，可能不精确对齐关键帧）</label>
+          <label class="meta" style="display:block"><input type="radio" name="rc-mode" value="precise"> 精确（重新定位，稍慢）</label>
+        </div>
+        <button class="btn primary" id="rc-cut" style="width:100%">✂️ 裁切这一段</button>
+        <button class="btn" id="rc-open-out" style="width:100%;margin-top:8px">📂 打开输出文件夹</button>
+        <h4 style="margin:18px 0 8px">已裁片段（可勾选拼接）</h4>
+        <div id="rc-segs" class="rc-segs"></div>
+        <div class="field" style="margin-top:8px"><label>拼接输出名</label><input id="rc-concat-name" value="拼接成片" style="width:100%"></div>
+        <button class="btn primary" id="rc-concat" style="width:100%;margin-top:8px">🎬 拼接导出</button>
+        <div class="meta" style="margin-top:10px">输出目录：库根下的「粗剪输出」文件夹（点「打开输出文件夹」直达）。</div>
+      </div>
+    </div>
   </section>
 </main>
 <div id="modal-root"></div>
@@ -787,12 +837,13 @@ function openLightbox(cid,hasP){
 async function setView(v){
   state.view=v;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
-  ['captures','composer','data','gallery','assets'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
+  ['captures','composer','data','gallery','assets','roughcut'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
   if(v==='captures')renderCaptures();
   if(v==='composer')renderComposer();
   if(v==='data')renderData();
   if(v==='gallery')renderGallery();
   if(v==='assets'){ await populateProjects(); renderAssetCatTabs(); await populateAssetParents(); renderAssets(); }
+  if(v==='roughcut') initRoughcut();
 }
 function goToSource(sourceId){ state.highlightId=sourceId; setView('captures'); }
 
@@ -2927,6 +2978,7 @@ async function initApp(){
   await populateProjects();
   renderAssetCatTabs();
   setView('captures');
+  bindVaultFolder();
 }
 async function boot(){
   try{
@@ -2938,6 +2990,173 @@ async function boot(){
     else { toast('初始化失败：'+((err&&err.message)||err)+'（如持续失败，可关闭其他本页面标签页后硬刷新，不要清除站点数据）'); }
   }
 }
+// ============ 本地文件夹（文件存储 / 打开文件夹） ============
+function safeName(n){
+  if(!n) return '未命名';
+  n = String(n).replace(/[\\/:*?"<>|\r\n\t]+/g,'_').replace(/^\.+/,'').trim();
+  if(!n) n='未命名';
+  if(n.length>80) n=n.slice(0,80);
+  return n;
+}
+// 集根资产 parent 为空；子资产 parent 直接存集名 → 两者都归入同名文件夹
+function vaultCollName(a){
+  if(!a.parent) return a.name || '未命名集';
+  return a.parent;
+}
+async function vaultExportAsset(a){
+  if(!window.vaultFS) return false;
+  const coll = safeName(vaultCollName(a));
+  const base = safeName(a.name || a.id || 'asset');
+  const blobs = [];
+  if(a.images && Array.isArray(a.images)) a.images.forEach((im,i)=>{ if(im&&im.blob) blobs.push({blob:im.blob, name: base+(i?('_'+i):'')+(im.ext?('.'+im.ext):'.png')}); });
+  if(a.video && a.video.blob) blobs.push({blob:a.video.blob, name: base+(a.video.ext?('.'+a.video.ext):'.mp4')});
+  if(a.media && a.media.blob) blobs.push({blob:a.media.blob, name: base+(a.media.ext?('.'+a.media.ext):'.bin')});
+  let mainFile=null;
+  for(const b of blobs){
+    try{
+      const buf = await b.blob.arrayBuffer();
+      await window.vaultFS.ensureDir(coll);
+      await window.vaultFS.writeFile(coll+'/'+b.name, new Uint8Array(buf));
+      mainFile = b.name;
+    }catch(e){ console.warn('write blob fail',e); }
+  }
+  if(!mainFile){
+    const text = [a.name||'', (a.genPrompt||(a.detail&&a.detail.text)||a.text||'')].filter(Boolean).join('\n\n');
+    if(text.trim()){ const rel=coll+'/'+base+'.md'; await window.vaultFS.ensureDir(coll); await window.vaultFS.writeFile(rel, text); mainFile=base+'.md'; }
+  }
+  // 边车 json：除二进制字段外所有属性
+  const side={};
+  for(const k of Object.keys(a)){ if(k==='images'||k==='video'||k==='media') continue; const v=a[k]; if(v&&typeof v==='object'&&v.blob) continue; side[k]=v; }
+  if(mainFile) await window.vaultFS.writeFile(coll+'/'+mainFile+'.json', JSON.stringify(side,null,2));
+  return true;
+}
+async function vaultExportAll(){
+  if(!window.vaultFS){ toast('此功能仅桌面版可用'); return null; }
+  let root = await window.vaultFS.getRoot();
+  if(!root){ const p = await window.vaultFS.pickRoot(); if(!p) return null; root=p; await window.vaultFS.setRoot(p); }
+  const assets = await getAll('assets');
+  let n=0; for(const a of assets){ try{ if(await vaultExportAsset(a)) n++; }catch(e){ console.warn('export fail',a&&a.id,e); } }
+  await refreshVaultRootUI();
+  toast('已导出 '+n+' 个资产到：'+root);
+  return root;
+}
+async function refreshVaultRootUI(){
+  const el=document.getElementById('vault-root-path');
+  if(!el) return;
+  if(!window.vaultFS){ el.textContent='（此功能仅桌面版可用）'; return; }
+  const root = await window.vaultFS.getRoot();
+  el.textContent = root ? ('当前库根：'+root+'  （点「打开库文件夹」在资源管理器中打开）') : '尚未选择库根目录';
+}
+async function bindVaultFolder(){
+  await refreshVaultRootUI();
+  const pick=document.getElementById('vault-pick');
+  const open=document.getElementById('vault-open');
+  const re=document.getElementById('vault-reexport');
+  if(pick) pick.onclick=async()=>{ const root=await vaultExportAll(); if(root) await window.vaultFS.openFolder(root); };
+  if(open) open.onclick=async()=>{ if(!window.vaultFS){toast('仅桌面版可用');return;} const root=await window.vaultFS.getRoot(); if(!root){ toast('请先「选择库根并导出」'); return; } await window.vaultFS.openFolder(root); };
+  if(re) re.onclick=async()=>{ if(!window.vaultFS){toast('仅桌面版可用');return;} const root=await window.vaultFS.getRoot(); if(!root){ toast('请先「选择库根并导出」'); return; } const assets=await getAll('assets'); let n=0; for(const a of assets){ try{ if(await vaultExportAsset(a)) n++; }catch(e){} } await refreshVaultRootUI(); toast('已重新导出 '+n+' 个资产'); };
+}
+
+// ============ 粗剪（Rough Cut） ============
+const rc = { src:null, blob:null, filePath:null, name:null, inSec:0, outSec:0, segs:[] };
+function fmtTime(s){
+  if(!isFinite(s)) s=0; s=Math.max(0,s);
+  const m=Math.floor(s/60), sec=Math.floor(s%60), cs=Math.floor((s%1)*10);
+  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')+'.'+cs;
+}
+async function initRoughcut(){
+  const sel=document.getElementById('rc-asset-select');
+  const fc=document.getElementById('rc-file');
+  const fb=document.getElementById('rc-file-btn');
+  const video=document.getElementById('rc-video');
+  const inEl=document.getElementById('rc-in');
+  const outEl=document.getElementById('rc-out');
+  const durEl=document.getElementById('rc-dur');
+  if(fb) fb.onclick=()=>{ if(fc) fc.click(); };
+  if(sel){
+    sel.innerHTML='<option value="">— 从成片资产选择 —</option>';
+    try{
+      const assets=await getAll('assets');
+      assets.filter(a=>a.category==='chengpian'&&a.video&&a.video.blob).forEach(a=>{
+        const opt=document.createElement('option'); opt.value=a.id; opt.textContent=(a.name||'未命名')+(a.shotNo?(' ['+a.shotNo+']'):''); sel.appendChild(opt);
+      });
+    }catch(e){}
+    sel.onchange=async()=>{
+      const id=sel.value; if(!id) return;
+      const a=await getOne('assets',id);
+      if(a&&a.video&&a.video.blob) loadRoughcutBlob(a.name||'clip', a.video);
+    };
+  }
+  if(fc) fc.onchange=()=>{ const f=fc.files&&fc.files[0]; if(f) loadRoughcutFile(f); };
+  video.ontimeupdate=()=>{ if(durEl) durEl.textContent='总长 '+fmtTime(video.duration); };
+  document.getElementById('rc-set-in').onclick=()=>{ rc.inSec=video.currentTime; inEl.value=fmtTime(rc.inSec); updateRcPreview(); };
+  document.getElementById('rc-set-out').onclick=()=>{ rc.outSec=video.currentTime; outEl.value=fmtTime(rc.outSec); updateRcPreview(); };
+  document.getElementById('rc-clear').onclick=()=>{ rc.inSec=0; rc.outSec=0; inEl.value=''; outEl.value=''; updateRcPreview(); };
+  document.getElementById('rc-cut').onclick=doRoughcutCut;
+  document.getElementById('rc-open-out').onclick=async()=>{ if(window.roughcut) await window.roughcut.openFolder(); };
+  document.getElementById('rc-concat').onclick=doRoughcutConcat;
+}
+function loadRoughcutFile(f){
+  if(rc.blobUrl) URL.revokeObjectURL(rc.blobUrl);
+  rc.blobUrl=URL.createObjectURL(f); rc.blob=f; rc.filePath=f.path||null;
+  rc.name=(f.name||'clip').replace(/\.[^.]+$/,'');
+  rc.src={type:'file'};
+  const v=document.getElementById('rc-video'); v.src=rc.blobUrl; v.load();
+  rc.inSec=0; rc.outSec=0; document.getElementById('rc-in').value=''; document.getElementById('rc-out').value='';
+  document.getElementById('rc-src-name').textContent='本地文件：'+f.name;
+  updateRcPreview();
+}
+function loadRoughcutBlob(name, videoObj){
+  if(rc.blobUrl) URL.revokeObjectURL(rc.blobUrl);
+  rc.blobUrl=URL.createObjectURL(videoObj.blob); rc.blob=videoObj.blob; rc.filePath=null; rc.name=name||'clip'; rc.src={type:'blob'};
+  const v=document.getElementById('rc-video'); v.src=rc.blobUrl; v.load();
+  rc.inSec=0; rc.outSec=0; document.getElementById('rc-in').value=''; document.getElementById('rc-out').value='';
+  document.getElementById('rc-src-name').textContent='成片资产：'+name;
+  updateRcPreview();
+}
+function updateRcPreview(){
+  const el=document.getElementById('rc-preview');
+  if(el) el.textContent='入点 '+fmtTime(rc.inSec)+'  出点 '+fmtTime(rc.outSec)+'  片段时长 '+fmtTime(Math.max(0,rc.outSec-rc.inSec));
+}
+async function doRoughcutCut(){
+  if(!rc.src){ toast('请先选择视频（本地文件或成片资产）'); return; }
+  if(!(rc.outSec>rc.inSec)){ toast('请先设入点和出点（出点要晚于入点）'); return; }
+  const outName=document.getElementById('rc-out-name').value||'';
+  const mode=document.querySelector('input[name=rc-mode]:checked').value;
+  toast('正在裁切…');
+  let srcPath=rc.filePath;
+  if(!srcPath){
+    try{
+      const ab=await rc.blob.arrayBuffer();
+      const r=await window.roughcut.saveBlob({name:rc.name||'clip', ext:'mp4', data:new Uint8Array(ab)});
+      if(!r||!r.ok){ toast('临时文件写入失败：'+(r&&r.error||'')); return; }
+      srcPath=r.path;
+    }catch(e){ toast('准备源失败：'+e.message); return; }
+  }
+  const r=await window.roughcut.cut({src:srcPath, inSec:rc.inSec, outSec:rc.outSec, outName, mode});
+  if(r&&r.ok){
+    rc.segs.push(r.outPath); renderRcSegs();
+    toast('✅ 已裁切：'+(r.outPath.split('\\').pop()));
+  }else{
+    toast('❌ 裁切失败：'+(r&&r.error||'未知'));
+  }
+}
+function renderRcSegs(){
+  const box=document.getElementById('rc-segs'); if(!box) return;
+  if(!rc.segs.length){ box.innerHTML='<div class="meta">尚无裁切片段</div>'; return; }
+  box.innerHTML=rc.segs.map((p,i)=>`<label class="seg-row"><input type="checkbox" data-i="${i}" checked> <span>片段${i+1}</span> <code>${p.split(/[\\/]/).pop()}</code></label>`).join('');
+}
+async function doRoughcutConcat(){
+  const checked=[...document.querySelectorAll('#rc-segs input:checked')].map(c=>+c.dataset.i);
+  const segs=checked.map(i=>rc.segs[i]).filter(Boolean);
+  if(segs.length<2){ toast('至少勾选 2 个片段才能拼接'); return; }
+  const outName=document.getElementById('rc-concat-name').value||'拼接成片';
+  toast('正在拼接…');
+  const r=await window.roughcut.concat({segments:segs, outName});
+  if(r&&r.ok){ toast('✅ 已拼接：'+(r.outPath.split(/[\\/]/).pop())); }
+  else{ toast('❌ 拼接失败：'+(r&&r.error||'未知')); }
+}
+
 boot();
 </script>
 <!-- 拼音首字母库（离线可用，供镜号项目名转 XLXM）。pinyin-pro 由 jsDelivr +esm 打包 -->
