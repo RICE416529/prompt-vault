@@ -468,16 +468,34 @@
     <div class="roughcut-layout" style="display:flex;gap:18px;align-items:flex-start;margin-top:14px">
       <div class="rc-left" style="flex:1;min-width:0">
         <video id="rc-video" controls style="width:100%;background:#000;border-radius:8px;max-height:60vh"></video>
-        <div class="rc-timeline" style="margin-top:12px">
-          <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
-            <span class="meta">入点</span><input id="rc-in" readonly style="width:92px">
-            <button class="btn" id="rc-set-in">设入点</button>
-            <span class="meta">出点</span><input id="rc-out" readonly style="width:92px">
-            <button class="btn" id="rc-set-out">设出点</button>
-            <button class="btn" id="rc-clear">清除</button>
+        <div class="rc-timeline" style="margin-top:14px">
+          <div id="rc-track" style="position:relative;height:48px;background:linear-gradient(#1c1c22,#15151a);border:1px solid #3a2a33;border-radius:6px;cursor:pointer;touch-action:none;overflow:hidden">
+            <div id="rc-ruler" style="position:absolute;inset:0;pointer-events:none"></div>
+            <div id="rc-sel" style="position:absolute;top:0;bottom:0;left:0;width:0;background:rgba(255,80,120,0.22);border-left:2px solid #ff6b81;border-right:2px solid #ff6b81;pointer-events:none"></div>
+            <div id="rc-playhead" style="position:absolute;top:0;bottom:0;left:0;width:2px;background:#5fd38a;pointer-events:none;box-shadow:0 0 6px #5fd38a"></div>
+            <div id="rc-handle-in" class="rc-handle" style="position:absolute;top:0;bottom:0;left:0;width:14px;margin-left:-7px;cursor:ew-resize;z-index:5;display:flex;align-items:flex-start;justify-content:center">
+              <div style="width:14px;height:100%;background:#5fd38a;border-radius:3px 0 0 3px;opacity:.92"></div>
+              <span style="position:absolute;top:-1px;font-size:9px;line-height:1;color:#5fd38a;font-weight:700;background:#15151a;padding:1px 2px;border-radius:2px">IN</span>
+            </div>
+            <div id="rc-handle-out" class="rc-handle" style="position:absolute;top:0;bottom:0;left:0;width:14px;margin-left:-7px;cursor:ew-resize;z-index:5;display:flex;align-items:flex-start;justify-content:center">
+              <div style="width:14px;height:100%;background:#ff6b81;border-radius:0 3px 3px 0;opacity:.92"></div>
+              <span style="position:absolute;top:-1px;font-size:9px;line-height:1;color:#ff6b81;font-weight:700;background:#15151a;padding:1px 2px;border-radius:2px">OUT</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;align-items:center">
+            <span class="meta">当前 <b id="rc-cur" style="color:#fff">00:00.0</b></span>
+            <span class="meta">入点 <b id="rc-in" style="color:#5fd38a">00:00.0</b></span>
+            <span class="meta">出点 <b id="rc-out" style="color:#ff6b81">00:00.0</b></span>
+            <span class="meta">选区 <b id="rc-preview" style="color:#fff">00:00.0</b></span>
             <span class="meta" id="rc-dur"></span>
           </div>
-          <div class="meta" id="rc-preview" style="margin-top:6px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button class="btn" id="rc-set-in">⤓ 入点=播放头</button>
+            <button class="btn" id="rc-set-out">⤓ 出点=播放头</button>
+            <button class="btn" id="rc-play-sel">▶ 播放选区</button>
+            <button class="btn" id="rc-clear">✕ 清除选区</button>
+          </div>
+          <div class="meta" style="margin-top:6px">拖动 IN / OUT 手柄框选区间；点击轨道定位播放头；或播放到位置后点「入点/出点=播放头」。</div>
         </div>
       </div>
       <div class="rc-right" style="width:320px;flex:none">
@@ -3058,7 +3076,7 @@ async function bindVaultFolder(){
 }
 
 // ============ 粗剪（Rough Cut） ============
-const rc = { src:null, blob:null, filePath:null, name:null, inSec:0, outSec:0, segs:[] };
+const rc = { src:null, blob:null, filePath:null, name:null, inSec:0, outSec:0, segs:[], duration:0, cur:0, playSel:false, blobUrl:null };
 function fmtTime(s){
   if(!isFinite(s)) s=0; s=Math.max(0,s);
   const m=Math.floor(s/60), sec=Math.floor(s%60), cs=Math.floor((s%1)*10);
@@ -3069,9 +3087,6 @@ async function initRoughcut(){
   const fc=document.getElementById('rc-file');
   const fb=document.getElementById('rc-file-btn');
   const video=document.getElementById('rc-video');
-  const inEl=document.getElementById('rc-in');
-  const outEl=document.getElementById('rc-out');
-  const durEl=document.getElementById('rc-dur');
   if(fb) fb.onclick=()=>{ if(fc) fc.click(); };
   if(sel){
     sel.innerHTML='<option value="">— 从成片资产选择 —</option>';
@@ -3088,13 +3103,31 @@ async function initRoughcut(){
     };
   }
   if(fc) fc.onchange=()=>{ const f=fc.files&&fc.files[0]; if(f) loadRoughcutFile(f); };
-  video.ontimeupdate=()=>{ if(durEl) durEl.textContent='总长 '+fmtTime(video.duration); };
-  document.getElementById('rc-set-in').onclick=()=>{ rc.inSec=video.currentTime; inEl.value=fmtTime(rc.inSec); updateRcPreview(); };
-  document.getElementById('rc-set-out').onclick=()=>{ rc.outSec=video.currentTime; outEl.value=fmtTime(rc.outSec); updateRcPreview(); };
-  document.getElementById('rc-clear').onclick=()=>{ rc.inSec=0; rc.outSec=0; inEl.value=''; outEl.value=''; updateRcPreview(); };
+  video.ontimeupdate=()=>{
+    rc.cur=video.currentTime;
+    if(rc.playSel && video.currentTime>=rc.outSec){ video.pause(); rc.playSel=false; }
+    const d=document.getElementById('rc-dur'); if(d) d.textContent='总长 '+fmtTime(video.duration);
+    rcUpdateUI();
+  };
+  const track=document.getElementById('rc-track');
+  if(track) track.addEventListener('pointerdown',(e)=>{
+    if(e.target.closest('.rc-handle')) return;
+    rcSeek(rcTimeFromX(e.clientX));
+  });
+  rcBindHandle('rc-handle-in','in');
+  rcBindHandle('rc-handle-out','out');
+  document.getElementById('rc-set-in').onclick=()=>{ if(!rc.duration) return; rc.inSec=Math.min(video.currentTime, Math.max(0,rc.outSec-0.05)); rc.inSec=Math.max(0,rc.inSec); rcUpdateUI(); };
+  document.getElementById('rc-set-out').onclick=()=>{ if(!rc.duration) return; rc.outSec=Math.max(video.currentTime, rc.inSec+0.05); rc.outSec=Math.min(rc.duration, rc.outSec); rcUpdateUI(); };
+  document.getElementById('rc-play-sel').onclick=()=>{
+    if(!(rc.outSec>rc.inSec)){ toast('请先设定入点和出点'); return; }
+    video.currentTime=rc.inSec; rc.playSel=true; video.play();
+  };
+  document.getElementById('rc-clear').onclick=()=>{ rc.inSec=0; rc.outSec=0; rcUpdateUI(); };
   document.getElementById('rc-cut').onclick=doRoughcutCut;
   document.getElementById('rc-open-out').onclick=async()=>{ if(window.roughcut) await window.roughcut.openFolder(); };
   document.getElementById('rc-concat').onclick=doRoughcutConcat;
+  rcRenderRuler();
+  rcUpdateUI();
 }
 function loadRoughcutFile(f){
   if(rc.blobUrl) URL.revokeObjectURL(rc.blobUrl);
@@ -3102,21 +3135,62 @@ function loadRoughcutFile(f){
   rc.name=(f.name||'clip').replace(/\.[^.]+$/,'');
   rc.src={type:'file'};
   const v=document.getElementById('rc-video'); v.src=rc.blobUrl; v.load();
-  rc.inSec=0; rc.outSec=0; document.getElementById('rc-in').value=''; document.getElementById('rc-out').value='';
+  v.onloadedmetadata=()=>{ rc.duration=v.duration||0; rc.inSec=0; rc.outSec=0; rc.cur=0; rc.playSel=false; rcRenderRuler(); rcUpdateUI(); };
   document.getElementById('rc-src-name').textContent='本地文件：'+f.name;
-  updateRcPreview();
 }
 function loadRoughcutBlob(name, videoObj){
   if(rc.blobUrl) URL.revokeObjectURL(rc.blobUrl);
   rc.blobUrl=URL.createObjectURL(videoObj.blob); rc.blob=videoObj.blob; rc.filePath=null; rc.name=name||'clip'; rc.src={type:'blob'};
   const v=document.getElementById('rc-video'); v.src=rc.blobUrl; v.load();
-  rc.inSec=0; rc.outSec=0; document.getElementById('rc-in').value=''; document.getElementById('rc-out').value='';
+  v.onloadedmetadata=()=>{ rc.duration=v.duration||0; rc.inSec=0; rc.outSec=0; rc.cur=0; rc.playSel=false; rcRenderRuler(); rcUpdateUI(); };
   document.getElementById('rc-src-name').textContent='成片资产：'+name;
-  updateRcPreview();
 }
-function updateRcPreview(){
-  const el=document.getElementById('rc-preview');
-  if(el) el.textContent='入点 '+fmtTime(rc.inSec)+'  出点 '+fmtTime(rc.outSec)+'  片段时长 '+fmtTime(Math.max(0,rc.outSec-rc.inSec));
+function rcPct(t){ return (rc.duration? (t/rc.duration*100):0)+'%'; }
+function rcTimeFromX(clientX){
+  const track=document.getElementById('rc-track'); if(!track) return 0;
+  const r=track.getBoundingClientRect();
+  let x=(clientX-r.left)/r.width; x=Math.min(1,Math.max(0,x));
+  return x*(rc.duration||0);
+}
+function rcSeek(t){
+  rc.cur=t; const v=document.getElementById('rc-video'); if(v) v.currentTime=t; rcUpdateUI();
+}
+function rcUpdateUI(){
+  const inP=rcPct(rc.inSec), outP=rcPct(rc.outSec);
+  const hi=document.getElementById('rc-handle-in'); if(hi) hi.style.left=inP;
+  const ho=document.getElementById('rc-handle-out'); if(ho) ho.style.left=outP;
+  const sel=document.getElementById('rc-sel'); if(sel){ sel.style.left=inP; sel.style.width=(parseFloat(outP)-parseFloat(inP))+'%'; }
+  const ph=document.getElementById('rc-playhead'); if(ph) ph.style.left=rcPct(rc.cur||0);
+  const ce=document.getElementById('rc-cur'); if(ce) ce.textContent=fmtTime(rc.cur||0);
+  const ie=document.getElementById('rc-in'); if(ie) ie.textContent=fmtTime(rc.inSec);
+  const oe=document.getElementById('rc-out'); if(oe) oe.textContent=fmtTime(rc.outSec);
+  const pe=document.getElementById('rc-preview'); if(pe) pe.textContent=fmtTime(Math.max(0,rc.outSec-rc.inSec));
+}
+function rcBindHandle(id, which){
+  const el=document.getElementById(id); if(!el) return;
+  el.addEventListener('pointerdown',(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+    const move=(ev)=>{
+      let t=rcTimeFromX(ev.clientX); t=Math.max(0,Math.min(rc.duration||0,t));
+      if(which==='in'){ rc.inSec=Math.min(t, rc.outSec-0.05); rc.inSec=Math.max(0,rc.inSec); }
+      else { rc.outSec=Math.max(t, rc.inSec+0.05); rc.outSec=Math.min(rc.duration||0, rc.outSec); }
+      rcUpdateUI();
+    };
+    const up=()=>{ try{ el.releasePointerCapture(e.pointerId); }catch(_){} el.removeEventListener('pointermove',move); el.removeEventListener('pointerup',up); };
+    el.addEventListener('pointermove',move);
+    el.addEventListener('pointerup',up);
+  });
+}
+function rcRenderRuler(){
+  const ruler=document.getElementById('rc-ruler'); if(!ruler) return;
+  ruler.innerHTML='';
+  const n=10;
+  for(let i=0;i<=n;i++){
+    const tick=document.createElement('div');
+    tick.style.cssText='position:absolute;top:0;bottom:0;left:'+(i/n*100)+'%;width:1px;background:rgba(255,255,255,0.14)';
+    ruler.appendChild(tick);
+  }
 }
 async function doRoughcutCut(){
   if(!rc.src){ toast('请先选择视频（本地文件或成片资产）'); return; }
