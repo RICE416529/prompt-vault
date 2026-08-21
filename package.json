@@ -1,0 +1,32 @@
+{
+  "name": "prompt-vault-studio",
+  "version": "1.0.0",
+  "description": "AI创作资产库桌面版（Electron 套壳，功能/排版/UI 与网页版一致）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.rice.promptvault",
+    "productName": "AI创作资产库",
+    "files": [
+      "main.js",
+      "index.html",
+      "pinyin-pro.esm.js",
+      "version.txt",
+      "resources"
+    ],
+    "directories": {
+      "buildResources": "resources"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    }
+  }
+}

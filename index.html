@@ -34,15 +34,42 @@
   }catch(e){}
 })();
 </script>
-<title>AI 创作库 · Vault Studio</title>
+<title>AI创作资产库</title>
 <style>
   :root{
     --bg:#0d0d0f; --bg2:#141417; --panel:#1a1a1f; --panel2:#202027;
     --border:#2a2a32; --border-acc:#ff4d6d; --accent:#ff5c8a; --accent2:#e63950;
     --text:#e8e8ea; --muted:#9a9aa2; --green:#3ddc84; --chip:#26262e;
+    /* 桌面端自定义标题栏高度（与 main.js titleBarOverlay.height 保持一致） */
+    --titlebar-h: 32px;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;font-size:14px}
+  /* 桌面端：自定义标题栏（仅 Electron 端可见，网页版无 titleBarOverlay 所以留空也无副作用）。
+     居中显示「AI创作资产库」，背景透明（让系统 overlay 透出），整条可拖动窗口。 */
+  .custom-titlebar{
+    position:fixed;top:0;left:0;right:0;height:var(--titlebar-h);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--text);font-size:12.5px;font-weight:600;letter-spacing:1.2px;
+    background:transparent;z-index:1000;pointer-events:none;
+    -webkit-user-select:none;user-select:none;
+  }
+  .custom-titlebar .ct-title{opacity:.85}
+  .custom-titlebar.draggable{ -webkit-app-region: drag; }
+  /* 让正文不被标题栏压住（桌面端）；网页端 --titlebar-h 不被覆盖所以顶到 0 */
+  body.has-titlebar{ padding-top: var(--titlebar-h); }
+  body.has-titlebar header{ top: var(--titlebar-h); }
+  /* 顶部下拉菜单（用于「＋ 新建资产」分拆为导入/手动） */
+  .dropdown{position:relative;display:inline-block}
+  .dropdown .caret{margin-left:4px;opacity:.8;font-size:10px}
+  .dropdown-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:50;min-width:200px;
+    background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    box-shadow:0 6px 18px rgba(0,0,0,.5);padding:4px;display:none}
+  .dropdown-menu.show{display:block}
+  .dropdown-menu .dd-item{display:block;width:100%;text-align:left;background:transparent;border:none;
+    color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer}
+  .dropdown-menu .dd-item:hover{background:var(--bg2);color:var(--accent)}
+  .dropdown-menu .dd-sep{height:1px;background:var(--border);margin:4px 0}
   header{position:sticky;top:0;z-index:20;background:rgba(13,13,15,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
   .nav{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:6px;padding:10px 18px}
   .brand{font-weight:700;font-size:16px;margin-right:18px;letter-spacing:.5px}
@@ -59,6 +86,8 @@
   button.btn:hover{border-color:var(--accent)}
   button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-weight:600}
   button.primary:hover{filter:brightness(1.08)}
+  /* 浅色皮肤用深色按钮字，深色皮肤保持白色 */
+  body[data-skin="D"] button.primary,body[data-skin="E"] button.primary{color:#334455}
   input,textarea,select{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit}
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
   input::placeholder,textarea::placeholder{color:#666}
@@ -80,7 +109,7 @@
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
   .actions button{flex:1;padding:6px 8px;font-size:12px}
-  .badge{display:inline-block;background:#2a1620;border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:6px}
+  .badge{display:inline-block;background:var(--chip);border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:6px}
   .badge.sub{border-color:var(--border);color:var(--muted);background:var(--chip);margin-left:4px}
   .block-card .body{position:relative}
   .src-link{font-size:11px;color:var(--accent);cursor:pointer}
@@ -111,7 +140,7 @@
   .cat-edit-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
   .cat-name{font-size:13px;font-weight:600;padding:6px 8px;width:100%}
   .cat-subs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .sub-chip{background:#2a2230;border:1px solid #4a2a3a;color:var(--text);font-size:12px;padding:3px 8px;border-radius:14px;display:inline-flex;align-items:center;gap:6px}
+  .sub-chip{background:var(--chip);border:1px solid var(--border);color:var(--text);font-size:12px;padding:3px 8px;border-radius:14px;display:inline-flex;align-items:center;gap:6px}
   .sub-chip .sub-x{cursor:pointer;color:var(--accent);font-weight:700}
   .sub-chip .sub-x:hover{color:var(--accent2)}
   .sub-add{font-size:12px;padding:4px 8px;width:110px}
@@ -183,11 +212,11 @@
   .blocks-pane-head{display:flex;align-items:center;gap:8px}
   .blocks-pane-head input{flex:1}
   .cat-tabs{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid var(--border)}
-  .cat-tab{background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px}
-  .cat-tab:hover{color:var(--text);border-color:var(--accent)}
-  .cat-tab.active{color:#fff;border-color:var(--border-acc);background:linear-gradient(180deg,#2a1620,#1a1a1f)}
+  .cat-tab{background:var(--panel2);border:1px solid var(--border);color:var(--cat-color,var(--muted));padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px}
+  .cat-tab:hover{color:var(--cat-color,var(--text));border-color:var(--cat-color,var(--accent))}
+  .cat-tab.active{color:var(--cat-color,#fff);border-color:var(--cat-color,var(--border-acc));background:linear-gradient(180deg,#2a1620,#1a1a1f)}
   .cat-tab .cnt{color:var(--muted);margin-left:4px;font-size:11px}
-  .cat-tab.active .cnt{color:#ffb3c6}
+  .cat-tab.active .cnt{color:var(--cat-color,#ffb3c6)}
 .blocks-list{display:flex;flex-direction:column;gap:7px;align-items:flex-start;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 240px);padding-right:6px;padding-bottom:14px;width:100%}
 .blocks-list::-webkit-scrollbar{width:6px}
 .blocks-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -239,11 +268,11 @@
   .m-body{padding:9px 10px;display:flex;flex-direction:column;gap:6px;flex:1}
   .m-badges{display:flex;gap:5px;flex-wrap:wrap}
   .m-name{font-size:13px;line-height:1.35;word-break:break-word}
-  .m-sub{font-size:11px;color:#9a9aa2;line-height:1.4;max-height:30px;overflow:hidden}
+  .m-sub{font-size:11px;color:var(--muted);line-height:1.4;max-height:30px;overflow:hidden}
   .m-body .actions{margin-top:auto;display:flex;gap:5px;flex-wrap:wrap}
   .m-body .actions .btn{padding:3px 9px;font-size:11px}
-  .badge.set{background:#10221c;border-color:#3fae8e;color:#5fe3b6}
-  .badge.sub{background:#1c1430;border-color:#7c5cff;color:#b9a6ff}
+  .badge.set{background:var(--chip);border-color:var(--accent);color:var(--accent)}
+  .badge.sub{background:var(--chip);border-color:var(--border);color:var(--muted)}
   /* 列表行（集内视图：每个子资产一行） */
   .list-grid{display:flex;flex-direction:column;gap:5px;margin-top:8px}
   .asset-row{display:flex;align-items:stretch;background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:grab;transition:border-color .15s,transform .1s}
@@ -275,10 +304,10 @@
   .subtype-nav .nav-title{font-size:12px;color:var(--muted);margin-right:4px}
   .subtype-nav .sub-chip{font-size:11px;padding:3px 10px;border-radius:14px;cursor:pointer;border:1px solid var(--border);background:var(--chip);display:inline-flex;align-items:center;gap:5px;color:var(--text)}
   .subtype-nav .sub-chip .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
-  .subtype-nav .sub-chip.active{border-color:var(--accent);background:#2a1620}
+  .subtype-nav .sub-chip.active{border-color:var(--accent);background:var(--chip)}
   .subtype-nav .sort-sel{margin-left:auto;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:12px}
   /* 小类标签带 hash 颜色 */
-  .badge.subtype{background:#1c1430}
+  .badge.subtype{background:var(--chip)}
   /* 提示词文本预览行高更紧凑 */
   .prompt-preview{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.6;white-space:pre-wrap;overflow:hidden;text-align:left;color:var(--text)}
   /* 黑底白字封面（提示词集无图时） */
@@ -306,23 +335,150 @@
   .av-row{display:grid;grid-template-columns:78px 1fr auto;gap:8px;align-items:start;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
   .av-k{color:var(--muted);font-size:12px;padding-top:2px}
   .av-v{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
-  .av-v.callout{background:#1a1320;border-color:#3a2030;color:#ffd9e2}
+  .av-v.callout{background:var(--panel2);border:1px solid var(--border);color:var(--text)}
   .av-copy{padding:3px 9px;font-size:11px;align-self:start}
   .av-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
   .av-tags .tag{font-size:11px;padding:2px 8px}
+
+  /* ===================== 皮肤系统（A 专业黑 / B 玻璃拟态 / BC 玻璃霓虹 / D 自然玻璃 / E 明亮科技玻璃） ===================== */
+  .bg-scene,.bg-user{position:fixed;inset:0;z-index:-2;opacity:0;transition:opacity .45s;pointer-events:none;overflow:hidden}
+  .bg-user{z-index:-1;background-size:cover;background-position:center;background-repeat:no-repeat}
+  body[data-skin="D"] .bg-scene{opacity:1}
+  body[data-skin="D"][data-userbg="true"] .bg-user{opacity:1}
+  body[data-skin="D"][data-userbg="true"] .bg-scene{opacity:0}
+  .bg-scene .sky{position:absolute;inset:0;transition:background .5s}
+  .bg-scene .sun{position:absolute;width:240px;height:240px;border-radius:50%;filter:blur(60px);opacity:.55;top:8%;left:50%;transform:translateX(-50%)}
+  .bg-scene .cloud{position:absolute;width:140%;height:45%;top:18%;left:-20%;border-radius:50%;filter:blur(40px);opacity:.7}
+  .bg-scene .mountain{position:absolute;bottom:0;left:-10%;right:-10%}
+  .bg-scene .mountain.far{height:58%;clip-path:polygon(0 100%,0 55%,18% 35%,35% 50%,52% 28%,70% 48%,85% 32%,100% 60%,100% 100%);opacity:.55}
+  .bg-scene .mountain.near{height:38%;clip-path:polygon(0 100%,0 65%,22% 42%,40% 58%,58% 38%,78% 55%,92% 45%,100% 62%,100% 100%);opacity:.85}
+  .bg-scene .mist{position:absolute;bottom:0;left:0;right:0;height:25%;background:linear-gradient(to top,rgba(255,255,255,.25),transparent)}
+  [data-bg="mountain"] .sky{background:linear-gradient(180deg,#c4d4dc,#d8e4e0 45%,#b8c8c0)}[data-bg="mountain"] .sun{background:#fff8e8}[data-bg="mountain"] .cloud{background:#fff}[data-bg="mountain"] .mountain{background:#5d6e68}
+  [data-bg="forest"] .sky{background:linear-gradient(180deg,#b8c8b0,#d0dcc8 50%,#a8b8a0)}[data-bg="forest"] .sun{background:#e8f0d8}[data-bg="forest"] .cloud{background:#eef5e8}[data-bg="forest"] .mountain{background:#3a4a38}
+  [data-bg="ocean"] .sky{background:linear-gradient(180deg,#9cb0c0,#b8c8d0 50%,#90a4b0)}[data-bg="ocean"] .sun{background:#d0e8f8}[data-bg="ocean"] .cloud{background:#e0eef8}[data-bg="ocean"] .mountain{background:#2f3f4f}
+  [data-bg="starry"] .sky{background:linear-gradient(180deg,#1a2030,#2a3048 55%,#1a2030)}[data-bg="starry"] .sun{background:#b8c0e8}[data-bg="starry"] .cloud{background:#4a5070;opacity:.45}[data-bg="starry"] .mountain{background:#101520}
+
+  /* 容器接管：只改弹窗/顶层，不动内部卡片，避免整张界面被切成小块 */
+  body[data-skin] .modal{background:var(--glass-bg,var(--panel));backdrop-filter:var(--glass-blur,none);-webkit-backdrop-filter:var(--glass-blur,none);border-radius:var(--radius-lg,14px)}
+  body[data-skin] header{background:var(--header-bg,rgba(13,13,15,.92))}
+  body[data-skin] .tab.active{background:var(--tab-active-bg,linear-gradient(180deg,#2a1620,#1a1a1f));border-color:var(--accent);box-shadow:0 0 0 1px rgba(var(--accent-rgb),.3)}
+  body[data-skin] .badge:not(.set):not(.sub):not(.subtype){background:var(--badge-bg,#2a1620);border-color:var(--accent);color:var(--accent)}
+  body[data-skin="D"] .modal{background-image:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.06))}
+  body[data-skin="E"] .modal{background-image:linear-gradient(155deg,rgba(255,255,255,.6),rgba(255,255,255,.2) 45%,rgba(255,255,255,.06))}
+  body[data-skin="E"] .thumb{background:#dfe8f0}
+  body[data-skin="E"] .prompt-snippet{color:#56697d}
+  body[data-skin="E"] .ex-card{background:rgba(255,255,255,.85)!important;border-color:rgba(150,180,210,.6)!important}
+  body[data-skin="E"] .ex-card .ex-name{color:#334a5e!important}
+  body[data-skin="E"] .ex-card .ex-ext{color:#6e8296!important}
+  body[data-skin="E"] .ex-card .ex-meta{color:#5a6a7a!important}
+  body[data-skin="E"] .ex-card .ex-newname{color:#d2456e!important}
+  body[data-skin="E"] .ex-card .ex-draghint{color:#6e8296!important}
+  body[data-skin="E"] .ex-card .ex-del{color:#c66!important;border-color:rgba(150,180,210,.6)!important}
+
+  /* D 自然玻璃：导出卡片文字深色可读 */
+  body[data-skin="D"] .ex-card{background:rgba(255,255,255,.45)!important;border-color:rgba(255,255,255,.5)!important}
+  body[data-skin="D"] .ex-card .ex-name{color:#334455!important}
+  body[data-skin="D"] .ex-card .ex-ext{color:#5a6a7a!important}
+  body[data-skin="D"] .ex-card .ex-meta{color:#5a6a7a!important}
+  body[data-skin="D"] .ex-card .ex-newname{color:#d2456e!important}
+  body[data-skin="D"] .ex-card .ex-draghint{color:#5a6a7a!important}
+  body[data-skin="D"] .ex-card .ex-del{color:#a44!important;border-color:rgba(255,255,255,.5)!important}
+
+  /* E 明亮风格：修正浅色背景上的浅色文字 */
+  body[data-skin="E"] .tab.active{color:#334455}
+  body[data-skin="E"] .cat-tab.active{color:var(--cat-color,#334455)}
+  body[data-skin="E"] .sug-chip.on{color:#334455}
+  body[data-skin="E"] .toast{background:#f0f4f8;color:#334455;border-color:var(--accent)}
+  body[data-skin="E"] .prompt-snippet{color:#56697d}
+  body[data-skin="E"] .thumb-toggle{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  body[data-skin="E"] .meta{color:#6e8296}
+
+  /* D 自然玻璃：风景背景偏浅，文字全部改为深色可读 */
+  body[data-skin="D"] .tab.active{color:#334455}
+  body[data-skin="D"] .cat-tab.active{color:var(--cat-color,#334455)}
+  body[data-skin="D"] .cat-tab.active .cnt{color:var(--cat-color,var(--accent))}
+  body[data-skin="D"] .sug-chip.on{color:#334455}
+  body[data-skin="D"] .toast{background:rgba(255,255,255,.75);color:#334455;border-color:var(--accent)}
+  body[data-skin="D"] .prompt-snippet{color:#5a6a7a}
+  body[data-skin="D"] .thumb-toggle{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  body[data-skin="D"] .meta{color:#6e8296}
+  body[data-skin="D"] .empty-row{color:#6e8296}
+  body[data-skin="D"] .row-thumb .ph{color:#777}
+  body[data-skin="D"] .row-thumb .prompt-preview{color:#334455}
+  body[data-skin="D"] .badge:not(.set):not(.sub):not(.subtype){background:rgba(255,255,255,.45);color:var(--accent)}
+  body[data-skin="D"] .sub-chip,body[data-skin="E"] .sub-chip{background:var(--chip);border-color:var(--border);color:var(--text)}
+
+  /* 背景渐变跟随视口，防止大屏出现硬边 */
+  body[data-skin]{background-attachment:fixed;min-height:100vh}
+
+  /* ---- 各风格布局变量 ---- */
+  body[data-skin="A"]{--bg:#0d0d0f;--bg2:#141417;--panel:#1a1a1f;--panel2:#202027;--border:#2a2a32;--text:#e8e8ea;--muted:#9a9aa2;--chip:#26262e;--radius-lg:8px;--radius-sm:6px;--glass-blur:none;--glass-bg:var(--panel);--card-shadow:0 2px 8px rgba(0,0,0,.4);--header-bg:rgba(13,13,15,.95);--tab-active-bg:linear-gradient(180deg,#23232a,#1a1a1f);--badge-bg:#23232a;--border-acc:#3a3a44}
+  body[data-skin="B"]{--bg:radial-gradient(ellipse 200vw 160vh at 75% -15%,rgba(255,220,235,.13),transparent 55%),radial-gradient(ellipse 180vw 140vh at 15% 110%,rgba(220,240,255,.11),transparent 50%),#110c14;--bg2:#1a1320;--panel:rgba(255,255,255,.08);--panel2:rgba(255,255,255,.05);--border:rgba(255,255,255,.22);--text:#f8f0f4;--muted:#c4b4c0;--chip:rgba(255,255,255,.1);--radius-lg:18px;--radius-sm:10px;--glass-blur:blur(20px) saturate(120%);--glass-bg:rgba(255,255,255,.09);--card-shadow:0 14px 40px rgba(0,0,0,.35);--header-bg:rgba(20,12,24,.55);--tab-active-bg:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));--badge-bg:rgba(255,255,255,.12);--border-acc:#ff9ec4}
+  body[data-skin="BC"]{--bg:radial-gradient(ellipse 220vw 170vh at 85% -10%,rgba(var(--accent-rgb),.23),transparent 55%),radial-gradient(ellipse 200vw 150vh at 0% 110%,rgba(var(--accent2-rgb),.16),transparent 50%),#0a0410;--bg2:#16091c;--panel:rgba(255,255,255,.05);--panel2:rgba(255,255,255,.03);--border:rgba(var(--accent-rgb),.45);--text:#ffe9f6;--muted:#c098c8;--chip:rgba(var(--accent-rgb),.12);--radius-lg:14px;--radius-sm:8px;--glass-blur:blur(16px);--glass-bg:rgba(255,255,255,.05);--card-shadow:0 0 30px rgba(var(--accent-rgb),.28);--header-bg:rgba(10,4,16,.7);--tab-active-bg:linear-gradient(180deg,rgba(var(--accent-rgb),.18),#16091c);--badge-bg:rgba(var(--accent-rgb),.16);--border-acc:var(--accent)}
+  body[data-skin="D"]{--bg:transparent;--bg2:rgba(255,255,255,.28);--panel:linear-gradient(135deg,rgba(255,255,255,.50),rgba(255,255,255,.28));--panel2:rgba(255,255,255,.35);--border:rgba(255,255,255,.60);--text:#334455;--muted:#5a6a7a;--chip:rgba(255,255,255,.45);--radius-lg:20px;--radius-sm:10px;--glass-blur:blur(30px) saturate(140%);--glass-bg:linear-gradient(135deg,rgba(255,255,255,.52),rgba(255,255,255,.28));--card-shadow:0 14px 44px rgba(0,0,0,.14);--header-bg:rgba(255,255,255,.35);--tab-active-bg:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.28));--badge-bg:rgba(255,255,255,.45);--border-acc:var(--accent)}
+  body[data-skin="E"]{--bg:radial-gradient(ellipse 220vw 170vh at 20% -10%,rgba(45,157,255,.11),transparent 55%),radial-gradient(ellipse 200vw 150vh at 90% 110%,rgba(0,200,255,.09),transparent 50%),linear-gradient(160deg,#eef5fb,#e3edf6 40%,#f0f4f8);--bg2:#e7eef5;--panel:linear-gradient(155deg,rgba(255,255,255,.72),rgba(255,255,255,.42) 40%,rgba(255,255,255,.18));--panel2:rgba(255,255,255,.55);--border:rgba(255,255,255,.85);--text:#334455;--muted:#6e8296;--chip:rgba(255,255,255,.65);--green:#2fae6a;--radius-lg:22px;--radius-sm:12px;--glass-blur:blur(24px) saturate(160%);--glass-bg:linear-gradient(155deg,rgba(255,255,255,.7),rgba(255,255,255,.4));--card-shadow:0 16px 40px rgba(40,80,120,.12);--header-bg:rgba(255,255,255,.6);--tab-active-bg:linear-gradient(180deg,rgba(var(--accent-rgb),.16),rgba(255,255,255,.4));--badge-bg:rgba(var(--accent-rgb),.14);--border-acc:var(--accent)}
+
+  /* ---- 各风格专属配色 ---- */
+  body[data-skin="A"][data-pal="graphite"]{--accent:#8a93a6;--accent2:#6b7280;--accent-rgb:138,147,166;--accent2-rgb:107,114,128;--border-acc:#8a93a6}
+  body[data-skin="A"][data-pal="bronze"]{--accent:#c08a5a;--accent2:#8a6a4a;--accent-rgb:192,138,90;--accent2-rgb:138,106,74;--border-acc:#c08a5a}
+  body[data-skin="A"][data-pal="crimson"]{--accent:#c4506a;--accent2:#8a3a4a;--accent-rgb:196,80,106;--accent2-rgb:138,58,74;--border-acc:#c4506a}
+  body[data-skin="A"][data-pal="pine"]{--accent:#5a9a7a;--accent2:#3a6a5a;--accent-rgb:90,154,122;--accent2-rgb:58,106,90;--border-acc:#5a9a7a}
+  body[data-skin="B"][data-pal="sakura"]{--accent:#ff9ec4;--accent2:#ffc4dd;--accent-rgb:255,158,196;--accent2-rgb:255,196,221;--border-acc:#ff9ec4}
+  body[data-skin="B"][data-pal="peach"]{--accent:#ffb3a0;--accent2:#ffd4c4;--accent-rgb:255,179,160;--accent2-rgb:255,212,196;--border-acc:#ffb3a0}
+  body[data-skin="B"][data-pal="lilac"]{--accent:#c4a9e8;--accent2:#ddc9f4;--accent-rgb:196,169,232;--accent2-rgb:221,201,244;--border-acc:#c4a9e8}
+  body[data-skin="B"][data-pal="mint"]{--accent:#9ee8c4;--accent2:#c4f4dd;--accent-rgb:158,232,196;--accent2-rgb:196,244,221;--border-acc:#9ee8c4}
+  body[data-skin="BC"][data-pal="classic"]{--accent:#ff5c8a;--accent2:#e63950;--accent-rgb:255,92,138;--accent2-rgb:230,57,80;--border-acc:#ff5c8a}
+  body[data-skin="BC"][data-pal="mc"]{--accent:#ff2d95;--accent2:#00e5ff;--accent-rgb:255,45,149;--accent2-rgb:0,229,255;--border-acc:#ff2d95}
+  body[data-skin="BC"][data-pal="red"]{--accent:#ff3b3b;--accent2:#ff9d2f;--accent-rgb:255,59,59;--accent2-rgb:255,157,47;--border-acc:#ff3b3b}
+  body[data-skin="BC"][data-pal="vio"]{--accent:#b14bff;--accent2:#4b8bff;--accent-rgb:177,75,255;--accent2-rgb:75,139,255;--border-acc:#b14bff}
+  body[data-skin="BC"][data-pal="grn"]{--accent:#2bff9e;--accent2:#00e5ff;--accent-rgb:43,255,158;--accent2-rgb:0,229,255;--border-acc:#2bff9e}
+  body[data-skin="BC"][data-pal="pea"]{--accent:#ff5ca8;--accent2:#ffd166;--accent-rgb:255,92,168;--accent2-rgb:255,209,102;--border-acc:#ff5ca8}
+  body[data-skin="BC"][data-pal="blu"]{--accent:#3b9bff;--accent2:#00e5ff;--accent-rgb:59,155,255;--accent2-rgb:0,229,255;--border-acc:#3b9bff}
+  body[data-skin="BC"][data-pal="gold"]{--accent:#ffb13b;--accent2:#ff6a3b;--accent-rgb:255,177,59;--accent2-rgb:255,106,59;--border-acc:#ffb13b}
+  body[data-skin="D"][data-pal="sage"]{--accent:#6fa88a;--accent2:#9bcbb0;--accent-rgb:111,168,138;--accent2-rgb:155,203,176;--border-acc:#6fa88a}
+  body[data-skin="D"][data-pal="mist"]{--accent:#7eb0c9;--accent2:#b0d4e6;--accent-rgb:126,176,201;--accent2-rgb:176,212,230;--border-acc:#7eb0c9}
+  body[data-skin="D"][data-pal="dawn"]{--accent:#d9a0a8;--accent2:#eac4c8;--accent-rgb:217,160,168;--accent2-rgb:234,196,200;--border-acc:#d9a0a8}
+  body[data-skin="D"][data-pal="sand"]{--accent:#d4b896;--accent2:#e8d5b0;--accent-rgb:212,184,150;--accent2-rgb:232,213,176;--border-acc:#d4b896}
+  body[data-skin="D"][data-pal="salvia"]{--accent:#7fae9a;--accent2:#a8d0bc;--accent-rgb:127,174,154;--accent2-rgb:168,208,188;--border-acc:#7fae9a}
+  body[data-skin="D"][data-pal="sky"]{--accent:#6bb3c9;--accent2:#9ed8e8;--accent-rgb:107,179,201;--accent2-rgb:158,216,232;--border-acc:#6bb3c9}
+  body[data-skin="E"][data-pal="ice"]{--accent:#2d9dff;--accent2:#74c4ff;--accent-rgb:45,157,255;--accent2-rgb:116,196,255;--border-acc:#2d9dff}
+  body[data-skin="E"][data-pal="silver"]{--accent:#7a8fa6;--accent2:#b0c0d0;--accent-rgb:122,143,166;--accent2-rgb:176,192,208;--border-acc:#7a8fa6}
+  body[data-skin="E"][data-pal="cyan"]{--accent:#00bcd4;--accent2:#64e8f0;--accent-rgb:0,188,212;--accent2-rgb:100,232,240;--border-acc:#00bcd4}
+  body[data-skin="E"][data-pal="indigo"]{--accent:#546de5;--accent2:#96a8ff;--accent-rgb:84,109,229;--accent2-rgb:150,168,255;--border-acc:#546de5}
+  body[data-skin="E"][data-pal="softv"]{--accent:#9b87d9;--accent2:#c9baf0;--accent-rgb:155,135,217;--accent2-rgb:201,186,240;--border-acc:#9b87d9}
+  body[data-skin="E"][data-pal="mint2"]{--accent:#4ecdc4;--accent2:#96e8d4;--accent-rgb:78,205,196;--accent2-rgb:150,232,212;--border-acc:#4ecdc4}
+
+  /* ---- 皮肤设置弹窗 ---- */
+  .skin-section{margin-bottom:16px}
+  .skin-section .lbl{font-size:12px;color:var(--muted);margin-bottom:8px;display:block}
+  .skin-row{display:flex;flex-wrap:wrap;gap:8px}
+  .skin-opt{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:4px;border-radius:10px;border:1px solid transparent}
+  .skin-opt.on{border-color:var(--accent);background:rgba(var(--accent-rgb),.1)}
+  .skin-sw{width:58px;height:40px;border-radius:8px;border:1px solid rgba(0,0,0,.15);position:relative;overflow:hidden}
+  .skin-sw .sw-dot{position:absolute;width:10px;height:10px;border-radius:50%;right:6px;bottom:6px}
+  .skin-opt .nm{font-size:11px;color:var(--text)}
+  .skin-clear{font-size:11px;color:var(--muted);margin-top:4px}
 </style>
 </head>
-<body>
+<body data-skin="BC" data-pal="classic">
+<!-- 皮肤背景层（D 自然玻璃风景 / 用户上传） -->
+<div class="bg-scene" id="bg-scene" data-bg="mountain"><div class="sky"></div><div class="sun"></div><div class="cloud"></div><div class="mountain far"></div><div class="mountain near"></div><div class="mist"></div></div>
+<div class="bg-user" id="bg-user"></div>
+<!-- 桌面端自定义标题栏：居中显示「AI创作资产库」，与系统 overlay 同色同高，整条可拖动窗口。
+     仅在 Electron 端可见（main.js 用了 titleBarStyle:hidden），网页端无 overlay 但加了也没副作用。
+     body.has-titlebar 类的添加见底部 init：根据 navigator.userAgent 检测 Electron 后加。 -->
+<div class="custom-titlebar draggable" id="custom-titlebar"><img src="resources/icon.png" alt="" style="height:18px;width:18px;border-radius:4px;margin-right:8px;object-fit:cover;pointer-events:none"><span class="ct-title">AI创作资产库</span></div>
 <header>
   <div class="nav">
-    <div class="brand">AI 创作<b>库</b><small>Vault Studio</small></div>
+    <div class="brand">AI创作<b>资产库</b><small>Vault Studio</small></div>
     <button class="tab active" data-view="captures">📥 收藏库</button>
     <button class="tab" data-view="composer">🛠 拼装台</button>
     <button class="tab" data-view="gallery">🖼 图库</button>
     <span class="nav-sep"></span>
     <button class="tab" data-view="assets">🎬 资产库</button>
+    <button class="tab" data-view="export">📦 导出整理</button>
     <button class="tab" data-view="data">💾 数据</button>
-    <button class="tab" data-view="roughcut">✂️ 粗剪</button>
+    <button class="btn" id="skin-btn" style="margin-left:auto">🎨 皮肤</button>
   </div>
 </header>
 <main>
@@ -442,11 +598,13 @@
       <div class="spacer"></div>
       <button class="btn" id="asset-cats-edit" title="管理顶部 tab 上的集分类（增/改/删/排序）">🗂 分类</button>
       <button class="btn" id="asset-presets" title="已下线：每个字段自带 chip 快捷输入" style="display:none">⚙ 预选项</button>
-      <button class="btn primary" id="asset-add">＋ 新建资产</button>
-      <button class="btn" id="asset-batch-video" title="选择多个视频文件，自动建为「成片」资产，每段一个独立资产">📥 批量导入视频</button>
-      <input type="file" id="asset-batch-video-file" accept="video/*" multiple hidden>
-      <button class="btn" id="asset-batch-image" title="选择多张图片（角色/场景/色板…），自动建为「角色」资产，每张一个独立资产">📥 批量导入图片</button>
-      <input type="file" id="asset-batch-image-file" accept="image/*" multiple hidden>
+      <div class="dropdown">
+        <button class="btn primary" id="asset-add" title="新建资产 · 下拉可选「从文件导入」或「手动新建」">＋ 新建资产 <span class="caret">▾</span></button>
+        <div class="dropdown-menu" id="asset-add-menu" role="menu">
+          <button class="dd-item" data-act="import" title="选择图片或视频，可多选，每个文件自动建为独立资产">📁 从文件导入（可多选）</button>
+        </div>
+      </div>
+      <input type="file" id="asset-import-file" accept="image/*,video/*" multiple hidden>
       <button class="btn" id="asset-export">📤 导出 Briefing</button>
       <button class="btn" id="asset-backup" title="导出整库 JSON（含图片/视频），用于 U 盘备份">📦 完整备份</button>
       <button class="btn" id="asset-restore" title="从 JSON 导入，按 id 并集去重合并（不覆盖、不重复）">📥 导入合并</button>
@@ -461,78 +619,58 @@
     <div id="asset-crumb" hidden></div>
     <div class="grid" id="asset-grid"></div>
   </section>
-  <!-- 粗剪（PR 式多视频拼接 · V3） -->
-  <section id="view-roughcut" hidden>
-    <div class="toolbar">
-      <button class="btn" id="rc-file-btn">📂 导入视频（多选）</button>
-      <select id="rc-asset-select" class="meta" style="min-width:200px"></select>
-      <button class="btn" id="rc-tool-select" data-tool="select" style="border-color:var(--accent);color:#fff;background:linear-gradient(180deg,#2a1620,#1a1a1f)">↖ 选择</button>
-      <button class="btn" id="rc-tool-blade" data-tool="razor">🪒 刻刀</button>
-      <div class="spacer"></div>
-      <span class="meta" style="font-size:12px">拼接输出名</span>
-      <input id="rc-out-name" placeholder="拼接成片" value="拼接成片" style="width:140px">
-      <button class="btn primary" id="rc-concat">🎬 拼接导出</button>
-      <button class="btn" id="rc-open-out" title="在资源管理器打开粗剪输出文件夹">📂</button>
-      <span class="meta" id="rc-lib-path"></span>
+  <!-- 素材导出整理：排列组合 + 可选批量重命名 + 一键复制/剪切到指定文件夹 -->
+  <section id="view-export" hidden>
+  <style>
+    .ex-group{ margin-bottom:18px; }
+    .ex-group-title{ font-size:14px; font-weight:600; color:var(--text); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+    .ex-group-title .cnt{ font-size:12px; color:var(--muted); font-weight:400; }
+    .ex-group-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; }
+    .ex-card{ cursor:grab; position:relative; background:var(--panel2); border:1px solid var(--border); border-radius:10px; overflow:hidden; user-select:none; }
+    .ex-card:active{ cursor:grabbing; }
+    .ex-card.dragging{ opacity:.4; transform:scale(.98); }
+    .ex-card.drag-over{ outline:2px dashed #ff5c8a; outline-offset:-2px; }
+    .ex-thumb{ position:relative; width:100%; aspect-ratio:16/9; background:#000; overflow:hidden; }
+    .ex-scrub{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; }
+    .ex-audio-thumb{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#1c1c22,#0a0a0a); }
+    .ex-audio-icon{ font-size:34px; color:#9ab2ff; }
+    .ex-img-thumb{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .2s; }
+    .ex-img-ph{ position:absolute; inset:0; width:100%; height:100%; display:none; align-items:center; justify-content:center; font-size:34px; color:#9ab2ff; background:linear-gradient(135deg,#1c1c22,#0a0a0a); }
+    .ex-scrubbar{ position:absolute; left:0; right:0; bottom:0; height:3px; background:rgba(255,255,255,.18); opacity:0; transition:opacity .12s; pointer-events:none; }
+    .ex-scrubfill{ height:100%; width:0; background:#ff5c8a; }
+    .ex-idx{ position:absolute; left:6px; top:6px; font-size:11px; color:#fff; background:rgba(0,0,0,.5); padding:1px 6px; border-radius:4px; }
+    .ex-kind{ position:absolute; right:6px; top:6px; font-size:10px; color:#9ab2ff; background:rgba(0,0,0,.5); padding:1px 5px; border-radius:4px; }
+    .ex-info{ padding:8px; display:flex; flex-direction:column; gap:5px; }
+    .ex-name{ font-size:12px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ex-ext{ color:#888; }
+    .ex-meta{ font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ex-newname{ font-size:11px; color:#ffb3c8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ex-actions{ display:flex; gap:4px; align-items:center; }
+    .ex-draghint{ flex:1; font-size:11px; color:#888; text-align:center; user-select:none; }
+    .ex-del{ flex:1; background:transparent; border:1px solid var(--border); color:#c66; border-radius:5px; cursor:pointer; padding:2px 0; }
+  </style>
+    <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+      <select id="ex-asset-select" class="meta" style="min-width:200px"><option value="">— 从成片库选择 —</option></select>
+      <select id="ex-project" class="meta" style="min-width:180px"><option value="">全部项目</option></select>
+      <button class="btn" id="ex-new-project">＋ 新建项目</button>
+      <button class="btn" id="ex-clear" title="仅清空本列表，不会删除原始文件">🗑 清空列表</button>
     </div>
-    <input type="file" id="rc-file" accept="video/*" multiple hidden>
-    <div class="roughcut-layout" style="display:grid;grid-template-columns:230px 1fr;gap:14px;margin-top:14px;align-items:start">
-      <!-- 左：视频源（PR 文件页卡片式） -->
-      <div class="rc-panel" style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px">
-        <h4 style="margin:2px 0 8px;font-size:13px">视频源 <span class="meta" id="rc-clips-count"></span></h4>
-        <div id="rc-clips" class="rc-clips" style="display:flex;flex-direction:column;gap:10px;max-height:66vh;overflow-y:auto;padding-right:2px"></div>
-        <div class="meta" style="margin-top:8px;line-height:1.5;color:#aaa;font-size:11px">拖方块到下方时间轴；单击预览；鼠标在方块上左右滑动即预览该处时间点画面（hover scrub）。</div>
-      </div>
-      <!-- 右：预览 + 片段裁切 + 拼接时间轴 -->
-      <div class="rc-center">
-        <video id="rc-video" controls style="width:100%;background:#000;border-radius:8px;max-height:46vh"></video>
-        <div class="rc-timeline" style="margin-top:12px">
-          <div id="rc-track" style="position:relative;height:44px;background:linear-gradient(#1c1c22,#15151a);border:1px solid #3a2a33;border-radius:6px;cursor:pointer;touch-action:none;overflow:hidden">
-            <div id="rc-ruler" style="position:absolute;inset:0;pointer-events:none"></div>
-            <div id="rc-sel" style="position:absolute;top:0;bottom:0;left:0;width:0;background:rgba(255,80,120,0.22);border-left:2px solid #ff6b81;border-right:2px solid #ff6b81;pointer-events:none"></div>
-            <div id="rc-playhead" style="position:absolute;top:0;bottom:0;left:0;width:2px;background:#5fd38a;pointer-events:none;box-shadow:0 0 6px #5fd38a"></div>
-            <div id="rc-handle-in" class="rc-handle" style="position:absolute;top:0;bottom:0;left:0;width:14px;margin-left:-7px;cursor:ew-resize;z-index:5;display:flex;align-items:flex-start;justify-content:center">
-              <div style="width:14px;height:100%;background:#5fd38a;border-radius:3px 0 0 3px;opacity:.92"></div>
-              <span style="position:absolute;top:-1px;font-size:9px;line-height:1;color:#5fd38a;font-weight:700;background:#15151a;padding:1px 2px;border-radius:2px">入</span>
-            </div>
-            <div id="rc-handle-out" class="rc-handle" style="position:absolute;top:0;bottom:0;left:0;width:14px;margin-left:-7px;cursor:ew-resize;z-index:5;display:flex;align-items:flex-start;justify-content:center">
-              <div style="width:14px;height:100%;background:#ff6b81;border-radius:0 3px 3px 0;opacity:.92"></div>
-              <span style="position:absolute;top:-1px;font-size:9px;line-height:1;color:#ff6b81;font-weight:700;background:#15151a;padding:1px 2px;border-radius:2px">出</span>
-            </div>
-          </div>
-          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center">
-            <span class="meta">当前 <b id="rc-cur" style="color:#fff">00:00.0</b></span>
-            <span class="meta">入点 <b id="rc-in" style="color:#5fd38a">00:00.0</b></span>
-            <span class="meta">出点 <b id="rc-out" style="color:#ff6b81">00:00.0</b></span>
-            <span class="meta">选区 <b id="rc-preview" style="color:#fff">00:00.0</b></span>
-            <span class="meta" id="rc-dur"></span>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-            <button class="btn" id="rc-set-in">⤓ 入点=播放头</button>
-            <button class="btn" id="rc-set-out">⤓ 出点=播放头</button>
-            <button class="btn" id="rc-play-sel">▶ 播放选区</button>
-            <button class="btn" id="rc-clear">✕ 清除选区</button>
-            <button class="btn primary" id="rc-add-seq">＋ 整段加入</button>
-            <button class="btn primary" id="rc-cut">✂️ 裁切并加入</button>
-          </div>
-          <div class="meta" style="margin-top:6px;color:#aaa;font-size:11px">选中时间轴某片段后，在此设它的入/出点（拖手柄框选 / 播放后按 ⤓ 抓播放头）；下方两个按钮：整段加入=未裁切全部进时间轴；裁切并加入=按当前入出区间。</div>
-        </div>
-        <!-- 拼接顺序时间轴（合并原"右栏裁剪+本块时间轴"两块，且加播放头） -->
-        <div class="rc-seq" style="margin-top:14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px;flex-wrap:wrap">
-            <h4 style="margin:0;font-size:13px">拼接时间轴（可拖拽排序 · 全局播放头可在空白处左右拖动）</h4>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <span class="meta" id="rc-seq-info">共 0 段，拼接总长 00:00.0</span>
-              <button class="btn" id="rc-play-concat">▶ 试播拼接</button>
-              <button class="btn" id="rc-stop-concat" hidden>⏹ 停止</button>
-            </div>
-          </div>
-          <div id="rc-seq-track" class="rc-seq-track" style="position:relative;min-height:96px;background:linear-gradient(#16161c,#101015);border:1px solid #3a2a33;border-radius:8px;padding:8px 8px 10px;display:flex;gap:6px;align-items:stretch;overflow-x:auto;overflow-y:hidden;cursor:crosshair">
-            <div id="rc-concat-playhead" style="position:absolute;top:2px;bottom:2px;width:2px;background:#fff;box-shadow:0 0 6px #fff;display:none;pointer-events:none;z-index:10"></div>
-          </div>
-          <div class="meta" style="margin-top:6px;color:#aaa;font-size:11px">单击片段=选中并预览入/出点；点击空白处=设置/拖动全局播放头（「↖ 选择」模式下）；「🪒 刻刀」模式下点片段任意位置=切成两段；同段拖动可重排。</div>
-        </div>
-      </div>
+    <div class="toolbar" style="margin-top:8px;flex-wrap:wrap;gap:8px">
+      <label class="meta"><input type="checkbox" id="ex-rename-on"> 启用重命名</label>
+      <span class="meta">前缀</span><input id="ex-prefix" style="width:80px" placeholder="SHOT_">
+      <span class="meta">后缀</span><input id="ex-suffix" style="width:80px" placeholder="_镜头">
+      <span class="meta">起始</span><input id="ex-seq-start" style="width:46px;text-align:center" value="1">
+      <span class="meta">位</span><input id="ex-digits" style="width:40px;text-align:center" value="3">
+      <span class="meta" style="margin-left:6px">导出方式：复制（源文件保留原位）</span>
+      <button class="btn" id="ex-dir-btn">📁 选择文件夹</button>
+      <input id="ex-dir" style="width:240px" placeholder="未选择（留空则导出时选择）">
+      <button class="btn primary" id="ex-export-btn">📦 按排列导出</button>
+      <span class="meta" id="ex-count"></span>
+    </div>
+    <div id="ex-tip" style="display:none;color:#ffb3c8;margin:6px 0">⚠️ 文件导入/导出功能需要桌面版（Electron）；当前网页版仅可预览与排序。</div>
+    <div id="ex-drop" class="ex-drop" style="margin-top:12px;min-height:42vh;border:1px dashed var(--border);border-radius:10px;padding:12px;outline:none">
+      <div id="ex-list" class="ex-list"></div>
+      <div id="ex-empty" class="meta" style="text-align:center;color:#888;padding:30px 0">还没有素材。从成片库选择、或直接把视频/音频/图片文件拖到此处。双击素材可放大预览，拖动卡片可调整同类型内的顺序。</div>
     </div>
   </section>
 </main>
@@ -572,7 +710,9 @@ function syncSortOrder(){
 }
 
 /* ============ 数据库 ============ */
-const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-17w';
+const DB_NAME='promptvault', DB_VER=2, APP_VER='2026-08-22';
+// 桌面端：给 body 加 has-titlebar 类，让自定义标题栏生效（仅 Electron 端）
+try{ if(navigator.userAgent.indexOf('Electron')>=0) document.body.classList.add('has-titlebar'); }catch(_){}
 let db, dbReady;
 function openDB(){
   if(dbReady) return dbReady;
@@ -904,13 +1044,13 @@ function openLightbox(cid,hasP){
 async function setView(v){
   state.view=v;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===v));
-  ['captures','composer','data','gallery','assets','roughcut'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
+  ['captures','composer','data','gallery','assets','export'].forEach(s=>document.getElementById('view-'+s).hidden=(s!==v));
   if(v==='captures')renderCaptures();
   if(v==='composer')renderComposer();
   if(v==='data')renderData();
   if(v==='gallery')renderGallery();
   if(v==='assets'){ await populateProjects(); renderAssetCatTabs(); await populateAssetParents(); renderAssets(); }
-  if(v==='roughcut') initRoughcut();
+  if(v==='export') initExport();
 }
 function goToSource(sourceId){ state.highlightId=sourceId; setView('captures'); }
 
@@ -1529,6 +1669,14 @@ const DEFAULT_ASSET_CATS = [
   {id:'chengpian', name:'成片', icon:'🎬', parent:'', hint:'成片视频：用资产创作的短片，可标注镜号与简介，后续可做粗剪'}
 ];
 let ASSET_CATS = JSON.parse(JSON.stringify(DEFAULT_ASSET_CATS));
+const ASSET_CAT_COLORS = {
+  character:'#7c5cff',
+  scene:'#3b9bff',
+  palette:'#ff5ca8',
+  prompt:'#ffb13b',
+  chengpian:'#2bff9e'
+};
+function assetCatColor(id){ return ASSET_CAT_COLORS[id] || 'var(--accent)'; }
 async function loadAssetCats(){
   try{
     const d=await getOne('meta','assetCats');
@@ -1697,7 +1845,7 @@ function renderAssetCatTabs(){
   if(ce) ce.style.display='';
   el.style.display='';
   el.innerHTML=`<button class="cat-tab ${state.assetCat==='all'?'active':''}" data-cat="all">全部</button>`+
-    ASSET_CATS.map(c=>`<button class="cat-tab ${state.assetCat===c.id?'active':''}" data-cat="${c.id}">${c.icon} ${c.name}</button>`).join('');
+    ASSET_CATS.map(c=>{ const col=assetCatColor(c.id); return `<button class="cat-tab ${state.assetCat===c.id?'active':''}" data-cat="${c.id}" style="--cat-color:${col}">${c.icon} ${c.name}</button>`; }).join('');
 }
 /* 缩略图：集封面 / 画板卡片通用 */
 function assetThumbHtml(a){
@@ -1745,13 +1893,14 @@ function assetHeadImg(a, coverUrl){
 function collectionCardHtml(a,cnt,coverUrl){
   const c=(cnt&&cnt[a.name])||0;
   const thumb = coverUrl ? `<div class="m-thumb"><img src="${coverUrl}" alt=""></div>` : assetThumbHtml(a);
-  const badges=`<span class="badge">${assetCatName(a.category)}</span><span class="badge set">集</span>${c?`<span class="badge sub">含 ${c} 个子资产</span>`:''}`;
+  const catCol=assetCatColor(a.category);
+  const badges=`<span class="badge" style="color:${catCol};border-color:${catCol}">${assetCatName(a.category)}</span><span class="badge set">集</span>${c?`<span class="badge sub">含 ${c} 个子资产</span>`:''}`;
   return `<div class="collection-card" data-aid="${a.id}">
     ${thumb}
     <div class="m-body">
       <div class="m-badges">${badges}</div>
       <div class="m-name"><b>${esc((a.name||'(未命名)'))}</b></div>
-      <div class="m-sub">${esc((a.purpose||'').slice(0,80))||'<span style="color:#666">（未填用途说明）</span>'}</div>
+      <div class="m-sub">${esc((a.purpose||'').slice(0,80))||'<span style="color:var(--muted)">（未填用途说明）</span>'}</div>
       <div class="actions">
         <button class="btn" data-act="view" data-id="${a.id}">查看</button>
         <button class="btn danger" data-act="del" data-id="${a.id}">删除</button>
@@ -1772,10 +1921,11 @@ function moodRowHtml(a, opts){
   opts=opts||{};
   const inCollection=!!opts.inCollection; // 在集内视图时，隐藏大类/所属集标签
   const subColor=a.subType?subTypeColor(a.subType):'var(--muted)';
+  const catCol=assetCatColor(a.category);
   // 集内视图：只显示「小类」标签（带 hash 颜色），隐藏「大类」「所属集」
   const badges = inCollection
     ? `${a.subType?`<span class="badge subtype" style="color:${subColor};border-color:${subColor}">${esc(a.subType)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`
-    : `<span class="badge">${assetCatName(a.category)}</span>${a.subType?`<span class="badge subtype" style="color:${subColor};border-color:${subColor}">${esc(a.subType)}</span>`:''}${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
+    : `<span class="badge" style="color:${catCol};border-color:${catCol}">${assetCatName(a.category)}</span>${a.subType?`<span class="badge subtype" style="color:${subColor};border-color:${subColor}">${esc(a.subType)}</span>`:''}${a.parent?`<span class="badge sub">${esc(a.parent)}</span>`:''}${a.callout?`<span class="badge">标注</span>`:''}`;
   // 色板资产且有图：右上角放「色板 / 图片」切换按钮
   const canToggle = a.category==='palette' && a.images && a.images.length;
   const toggle = canToggle ? `<button class="thumb-toggle" data-toggle="${a.id}" title="切换 色板 / 图片 封面">${(a.thumbMode||'palette')==='image'?'🎨 色板':'🖼️ 图片'}</button>` : '';
@@ -2859,28 +3009,50 @@ async function openAssetView(id){
 }
 document.getElementById('asset-cats-edit').addEventListener('click',openAssetCatEditor);
 // document.getElementById('asset-presets')?.addEventListener('click',openPresetManager); // ⚙ 预选项入口已下线（按钮已隐藏），函数也已删除
-document.getElementById('asset-add').addEventListener('click',()=>{
-  if(state.assetCollection) openAssetModal(null, state.assetCollection); // 集内→新建资产，默认归入当前集
-  else openAssetModal(null, ''); // 总览→新建集（根资产，无所属集）
+document.getElementById('asset-add').addEventListener('click',(e)=>{
+  // 点右侧 ▾ = 展开下拉（从文件导入）；点主按钮本体 = 打开「创建/新建」界面
+  if(e.target.classList.contains('caret')){
+    const m=document.getElementById('asset-add-menu');
+    if(m) m.classList.toggle('show');
+    e.stopPropagation();
+    return;
+  }
+  // 主按钮：打开新建界面（集内→新资产，总览→新建集），与早期行为一致
+  if(state.assetCollection) openAssetModal(null, state.assetCollection);
+  else openAssetModal(null, '');
 });
-document.getElementById('asset-batch-video').addEventListener('click',()=>document.getElementById('asset-batch-video-file').click());
-document.getElementById('asset-batch-image').addEventListener('click',()=>document.getElementById('asset-batch-image-file').click());
-async function batchImportAssets(files, isVideo){
+// 下拉菜单项点击：仅「从文件导入」
+document.getElementById('asset-add-menu').addEventListener('click',(e)=>{
+  const btn=e.target.closest('.dd-item'); if(!btn) return;
+  document.getElementById('asset-add-menu').classList.remove('show');
+  const inp=document.getElementById('asset-import-file');
+  if(inp) inp.click();
+});
+// 点页面别处关闭下拉
+document.addEventListener('click',(e)=>{
+  const m=document.getElementById('asset-add-menu');
+  if(m && m.classList.contains('show') && !e.target.closest('.dropdown')) m.classList.remove('show');
+});
+async function importMixedAssets(files){
   if(!files || !files.length) return;
   const projectId = state.assetProject || '';
-  // 确定 categories.id：优先用 isVideo 推断
-  const catId = isVideo ? 'chengpian' : 'character';
+  // 若正处于某个"集"内，则导入的资产归入该集（用集的分类）
+  const inCol = state.assetCollection;
+  let colCat = '';
+  if(inCol){ try{ const c = await getOne('assets', inCol); if(c && c.category) colCat = c.category; }catch(_){} }
   let count = 0;
   for(const f of files){
+    const isVid = (f.type||'').startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|m4v|mts|flv)$/i.test(f.name||'');
+    const cat = isVid ? 'chengpian' : (inCol ? (colCat || 'character') : (state.assetCat && state.assetCat!=='all' ? state.assetCat : 'character'));
     const a = {
       id: uid(),
       projectId,
-      category: catId,
+      category: cat,
       name: (f.name || ('未命名-' + (count+1))).replace(/\.[^.]+$/, '').slice(0, 40),
-      parent: '',
+      parent: inCol || '',
       subType: '',
-      images: isVideo ? [] : [{blob:f, url:null, caption:''}],
-      video: isVideo ? {blob:f, name:f.name} : null,
+      images: isVid ? [] : [{blob:f, url:null, caption:''}],
+      video: isVid ? {blob:f, name:f.name} : null,
       purpose: '',
       tool: '',
       genPrompt: '',
@@ -2892,17 +3064,12 @@ async function batchImportAssets(files, isVideo){
     await putOne('assets', a);
     count++;
   }
-  if(count) toast('已批量导入 ' + count + ' 个' + (isVideo?'视频成片':'图片资产') + ' ✓');
+  if(count) toast('已导入 ' + count + ' 个资产 ✓（图片归「'+(inCol?'当前集':(state.assetCat!=='all'?state.assetCat:'角色'))+'」、视频归「成片」）');
   renderAssets();
 }
-document.getElementById('asset-batch-video-file').addEventListener('change', async (e)=>{
+document.getElementById('asset-import-file').addEventListener('change', async (e)=>{
   const fs = [...e.target.files];
-  await batchImportAssets(fs, true);
-  e.target.value='';
-});
-document.getElementById('asset-batch-image-file').addEventListener('change', async (e)=>{
-  const fs = [...e.target.files];
-  await batchImportAssets(fs, false);
+  await importMixedAssets(fs);
   e.target.value='';
 });
 document.getElementById('asset-export').addEventListener('click',openExportBriefing);
@@ -3209,526 +3376,374 @@ async function bindVaultFolder(){
   if(re) re.onclick=async()=>{ if(!window.vaultFS){toast('仅桌面版可用');return;} const root=await window.vaultFS.getRoot(); if(!root){ toast('请先「选择库根并导出」'); return; } const assets=await getAll('assets'); let n=0; for(const a of assets){ try{ if(await vaultExportAsset(a)) n++; }catch(e){} } await refreshVaultRootUI(); toast('已重新导出 '+n+' 个资产'); };
 }
 
-// ============ 粗剪（Rough Cut） ============
-const rc = { clips:[], timeline:[], activeId:null, activeItemUid:null, cur:0, playSel:false,
-             tool:'select',              // 'select'（默认，移动播放头/选片段）或 'razor'（刻刀）
-             concatPlay:0,               // 当前全局拼接时间（秒），对应 rc-seq-track 上白线位置
-             playConcatTimer:null,       // 试播拼接的 setInterval 句柄
-             playConcatRaf:null };       // 试播时驱动中栏 video 的 RAF
-let rcUidCounter=0;
-function rcUid(){ return 'rc'+Date.now().toString(36)+'_'+(rcUidCounter++); }
-function rcActiveClip(){ return rc.clips.find(c=>c.id===rc.activeId)||null; }
-function rcActiveItem(){ return rc.timeline.find(t=>t.uid===rc.activeItemUid)||null; }
-function rcSeqTotal(){ return rc.timeline.reduce((s,t)=>s+Math.max(0,t.outSec-t.inSec),0); }
-function fmtTime(s){
-  if(!isFinite(s)) s=0; s=Math.max(0,s);
-  const m=Math.floor(s/60), sec=Math.floor(s%60), cs=Math.floor((s%1)*10);
-  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')+'.'+cs;
+// ============ 素材导出整理（Export / Arrange） ============
+// 把 AI 生成的镜头按顺序排列，可选批量重命名，再一键复制/剪切到指定本地文件夹。
+let exportItems = [];
+let exProjectsCache = [];
+function exUid(){ return 'ex'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
+function exStripExt(n){ return (n||'').replace(/\.[^.]+$/,'')||n; }
+function exExtOf(n){ const m=(n||'').match(/\.(\w+)$/); return m?m[1].toLowerCase():''; }
+function exJoin(dir, name){ return (dir||'').replace(/[\\/]+$/,'')+'\\'+name; }
+function exDirOf(p){ if(!p) return ''; const i=Math.max(p.lastIndexOf('\\'),p.lastIndexOf('/')); return i>0?p.slice(0,i):''; }
+function exFolderName(p){ const d=exDirOf(p); const i=Math.max(d.lastIndexOf('\\'),d.lastIndexOf('/')); return i>=0?d.slice(i+1):d; }
+function exProjectNameFor(id){ if(!id) return ''; const p=exProjectsCache.find(x=>x.id===id); return p?(p.name||''):''; }
+function exKindOf(f){
+  const name=(f.name||'').toLowerCase(), type=(f.type||'').toLowerCase();
+  if(type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(name)) return 'image';
+  if(type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac|wma)$/i.test(name)) return 'audio';
+  if(type.startsWith('video/') || /\.(mp4|mov|avi|mkv|wmv|flv|webm|m4v)$/i.test(name)) return 'video';
+  return 'video';
 }
-async function initRoughcut(){
-  const sel=document.getElementById('rc-asset-select');
-  const fc=document.getElementById('rc-file');
-  const fb=document.getElementById('rc-file-btn');
-  const video=document.getElementById('rc-video');
-  if(fb) fb.onclick=()=>{ if(fc) fc.click(); };
-  if(fc) fc.onchange=()=>{ if(fc.files) for(const f of fc.files) addClipFromFile(f); fc.value=''; };
+function exFmtDuration(s){ if(!s || !isFinite(s)) return '--:--'; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60); if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; return `${m}:${String(sec).padStart(2,'0')}`; }
+function exProbeDuration(blobUrl, kind){
+  return new Promise(resolve=>{
+    if(!blobUrl || kind==='image') return resolve(0);
+    const el = kind==='audio' ? new Audio() : document.createElement('video');
+    el.preload='metadata'; el.muted=true;
+    el.onloadedmetadata=()=>resolve(el.duration||0);
+    el.onerror=()=>resolve(0);
+    el.src=blobUrl;
+  });
+}
+
+async function initExport(){
+  try{ exProjectsCache=await getAll('projects'); }catch(_){ exProjectsCache=[]; }
+  const prj=document.getElementById('ex-project');
+  const newPrjBtn=document.getElementById('ex-new-project');
+  if(newPrjBtn) newPrjBtn.onclick=()=>openExportNewProjectModal();
+  if(prj){
+    try{ prj.innerHTML='<option value="">全部项目</option><option value="none">未归类</option>'+exProjectsCache.map(p=>`<option value="${esc(p.id)}">${esc(p.name||'未命名')}</option>`).join(''); prj.value=curExProject||''; }catch(_){}
+    prj.onchange=()=>{ curExProject=prj.value; exportRender(); };
+  }
+  const sel=document.getElementById('ex-asset-select');
   if(sel){
-    sel.innerHTML='<option value="">— 从成片资产选择 —</option>';
+    sel.innerHTML='<option value="">— 从成片库选择 —</option>';
     try{
       const assets=await getAll('assets');
       assets.filter(a=>a.category==='chengpian'&&a.video&&a.video.blob).forEach(a=>{
-        const opt=document.createElement('option'); opt.value=a.id; opt.textContent=(a.name||'未命名')+(a.shotNo?(' ['+a.shotNo+']'):''); sel.appendChild(opt);
+        const o=document.createElement('option'); o.value=a.id; o.textContent=(a.name||'未命名')+(a.shotNo?(' ['+a.shotNo+']'):''); sel.appendChild(o);
       });
     }catch(e){}
-    sel.onchange=async()=>{ const id=sel.value; if(!id) return; const a=await getOne('assets',id); if(a&&a.video&&a.video.blob) addClipFromAsset(a); sel.value=''; };
+    sel.onchange=async()=>{ const id=sel.value; if(!id) return; const a=await getOne('assets',id); sel.value=''; if(a&&a.video&&a.video.blob){ const ext=exExtOf(a.video.name||a.name||'mp4')||'mp4'; const ownerId=curExProject||a.projectId||''; const it={id:exUid(), name:exStripExt(a.name||'clip'), srcPath:null, srcDir:'', assetId:id, kind:'video', ext, _blobUrl:null, projectId:ownerId, projectName:exProjectNameFor(ownerId)||'', duration:0, durationFmt:'--:--'}; if(a.video.blob){ it._blobUrl=URL.createObjectURL(a.video.blob); it.duration=await exProbeDuration(it._blobUrl,'video'); it.durationFmt=exFmtDuration(it.duration); } exportItems.push(it); exportSave(); exportRender(); } };
   }
-  video.ontimeupdate=()=>{
-    const it=rcActiveItem();
-    rc.cur=video.currentTime;
-    if(it && rc.playSel && video.currentTime>=it.outSec){ video.pause(); rc.playSel=false; }
-    const d=document.getElementById('rc-dur'); if(d) d.textContent='总长 '+fmtTime(video.duration);
-    rcUpdateUI();
-  };
-  const track=document.getElementById('rc-track');
-  if(track) track.addEventListener('pointerdown',(e)=>{
-    if(e.target.closest('.rc-handle')) return;
-    const it=rcActiveItem(); if(!it) return;
-    rcSeekOnItem(it, rcTimeFromX(e.clientX));
-  });
-  rcBindHandle('rc-handle-in','in');
-  rcBindHandle('rc-handle-out','out');
-  document.getElementById('rc-set-in').onclick=()=>{ const it=rcActiveItem(); const v=document.getElementById('rc-video'); if(!it||!it.duration) return; it.inSec=Math.min(v.currentTime, Math.max(0,it.outSec-0.05)); it.inSec=Math.max(0,it.inSec); rcUpdateUI(); };
-  document.getElementById('rc-set-out').onclick=()=>{ const it=rcActiveItem(); const v=document.getElementById('rc-video'); if(!it||!it.duration) return; it.outSec=Math.max(v.currentTime, it.inSec+0.05); it.outSec=Math.min(it.duration, it.outSec); rcUpdateUI(); };
-  document.getElementById('rc-play-sel').onclick=()=>{ const it=rcActiveItem(); const v=document.getElementById('rc-video'); if(!it||!(it.outSec>it.inSec)){ toast('请先选定时间轴片段并设入/出点'); return; } v.currentTime=it.inSec; rc.playSel=true; v.play(); };
-  document.getElementById('rc-clear').onclick=()=>{ const it=rcActiveItem(); if(!it) return; it.inSec=0; it.outSec=it.duration; rcUpdateUI(); };
-  document.getElementById('rc-add-seq').onclick=()=>{ const c=rcActiveClip(); if(!c){ toast('请先在左侧预览一个视频'); return; } rcAddToTimeline(c.id, 0, c.duration); };
-  document.getElementById('rc-cut').onclick=()=>{ const c=rcActiveClip(); if(!c){ toast('请先预览一个视频'); return; } const it=rcActiveItem(); const inSec=it?it.inSec:0, outSec=it?it.outSec:c.duration; rcAddToTimeline(c.id, inSec, outSec); };
-  document.getElementById('rc-open-out').onclick=async()=>{ if(window.roughcut) await window.roughcut.openFolder(); };
-  document.getElementById('rc-concat').onclick=doRoughcutConcat;
-
-  // 工具栏：↖ 选择 / 🪒 刻刀
-  const toolSelBtn=document.getElementById('rc-tool-select');
-  const toolBlBtn =document.getElementById('rc-tool-blade');
-  function setRcTool(t){
-    rc.tool=t;
-    if(toolSelBtn) toolSelBtn.style.cssText = (t==='select')? 'border-color:var(--accent);color:#fff;background:linear-gradient(180deg,#2a1620,#1a1a1f)':'';
-    if(toolBlBtn)  toolBlBtn.style.cssText  = (t==='razor')?  'border-color:var(--accent);color:#fff;background:linear-gradient(180deg,#2a1620,#1a1a1f)':'';
+  const clr=document.getElementById('ex-clear'); if(clr) clr.onclick=()=>{ if(confirm('清空列表？\n\n仅移除导出整理面板里的素材清单，不会删除任何原始文件。')){ exportItems=[]; exportSave(); exportRender(); } };
+  const exp=document.getElementById('ex-export-btn'); if(exp) exp.onclick=exportDoExport;
+  const dirb=document.getElementById('ex-dir-btn'); if(dirb) dirb.onclick=async()=>{ if(!window.filemgr){ toast('此功能需桌面版'); return; } const d=await window.filemgr.selectDir(); if(d){ const el=document.getElementById('ex-dir'); if(el) el.value=d; } };
+  ['ex-prefix','ex-suffix','ex-seq-start','ex-digits'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input', exportRenderPreview); });
+  const on=document.getElementById('ex-rename-on'); if(on) on.addEventListener('change', exportRenderPreview);
+  const drop=document.getElementById('ex-drop');
+  if(drop && !drop.dataset.bound){ drop.dataset.bound='1';
+    drop.addEventListener('dragover',(e)=>{ if(e.dataTransfer&&e.dataTransfer.types&&e.dataTransfer.types.includes('Files')){ e.preventDefault(); drop.style.outline='2px dashed #ff6b81'; } });
+    drop.addEventListener('dragleave',()=>{ drop.style.outline=''; });
+    drop.addEventListener('drop',(e)=>{ if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){ e.preventDefault(); for(const f of e.dataTransfer.files) exportAddFileObj(f); drop.style.outline=''; exportSave(); exportRender(); } });
   }
-  setRcTool('select');
-  if(toolSelBtn) toolSelBtn.onclick=()=>setRcTool('select');
-  if(toolBlBtn)  toolBlBtn.onclick =()=>setRcTool('razor');
-
-  // 试播拼接 / 停止
-  document.getElementById('rc-play-concat').onclick=rcPlayConcat;
-  document.getElementById('rc-stop-concat').onclick=rcStopConcat;
-
-  // 拼接时间轴：drop / 空白处拖动（依工具分支）
-  const seq=document.getElementById('rc-seq-track');
-  if(seq){
-    seq.addEventListener('dragover',(e)=>{ e.preventDefault(); seq.style.outline='1px dashed #ff6b81'; });
-    seq.addEventListener('dragleave',()=>{ seq.style.outline=''; });
-    seq.addEventListener('drop',(e)=>{
-      e.preventDefault(); seq.style.outline='';
-      const clipId=e.dataTransfer.getData('text/rc-clip');
-      if(clipId){ rcAddToTimeline(clipId, 0, (rc.clips.find(c=>c.id===clipId)||{}).duration||0); return; }
-      const seqUid=e.dataTransfer.getData('text/rc-seq');
-      if(seqUid){ rcSeqReorder(seqUid, e.clientX); }
-    });
-    seq.addEventListener('mousedown',(e)=>{
-      // 落在已有片段块上交给块自身的 onmousedown 处理（mousedown 顺序：先到这里再冒泡到块）；
-      // 在这里我们拦截空白区域，按工具类型分发。
-      if(e.target.closest('[data-uid]')) return;
-      if(!rc.timeline.length) return;
-      if(rc.tool==='razor') return; // 刻刀模式下点空白什么都不做
-      e.preventDefault();
-      const onMove=(ev)=>setConcatPlayheadFromX(ev.clientX);
-      const onUp=()=>{
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      setConcatPlayheadFromX(e.clientX);
-    });
-    // 拼接时间轴滚动时同步播放头位置
-    seq.addEventListener('scroll', updateConcatPlayheadPos);
-  }
-  rcRenderRuler();
-  renderRcClips(); renderRcTimeline(); rcUpdateUI();
-  if(window.vaultFS){ try{ const root=await window.vaultFS.getRoot(); const el=document.getElementById('rc-lib-path'); if(el) el.textContent= root?('库根：'+root):''; }catch(_){} }
+  await exportLoad();
+  exportRender();
+  const tip=document.getElementById('ex-tip'); if(tip) tip.style.display = window.filemgr? 'none':'block';
 }
 
-// 全局拼接播放头：根据鼠标 x → 找落点 segment → 设 rc.concatPlay、中栏 video 切到该段对应时间
-function setConcatPlayheadFromX(clientX){
-  const total=rcSeqTotal();
-  if(total<=0) return;
-  const seq=document.getElementById('rc-seq-track');
-  const r=seq.getBoundingClientRect();
-  // 边界处理：拖到开头/末外
-  const ratio=Math.max(0, Math.min(1, (clientX-r.left)/r.width));
-  const time=ratio*total;
-  setConcatPlayhead(time);
-}
-function setConcatPlayhead(time){
-  rc.concatPlay=Math.max(0, time);
-  const total=Math.max(0.001, rcSeqTotal());
-  const ph=document.getElementById('rc-concat-playhead');
-  if(ph){
-    ph.style.display='block';
-    ph.style.left=(Math.max(0, Math.min(1, rc.concatPlay/total))*100)+'%';
-  }
-  // 命中哪一段
-  let cum=0; let target=null; let local=0;
-  for(const t of rc.timeline){
-    const d=Math.max(0, t.outSec-t.inSec);
-    if(rc.concatPlay<=cum+d){ target=t; local=t.inSec+(rc.concatPlay-cum); break; }
-    cum+=d;
-  }
-  if(!target) return;
-  const needSwitch = (rc.activeItemUid!==target.uid);
-  rc.activeItemUid=target.uid;
-  rcUpdateUI();
-  if(needSwitch){
-    // 切 video 到该段
-    loadClipIntoPreview(target.clipId);
-    requestAnimationFrame(()=>{
-      const v=document.getElementById('rc-video');
-      const trySeek=()=>{ try{ v.currentTime=local; v.pause(); }catch(_){} };
-      if(v && v.readyState>=1) trySeek();
-      else if(v) v.onloadedmetadata=trySeek;
-    });
-  } else {
-    // 同段内移动：只改 currentTime
-    const v=document.getElementById('rc-video');
-    if(v && v.readyState>=1){ try{ v.currentTime=local; v.pause(); }catch(_){} }
-    rc.cur=local;
-  }
-  renderRcTimeline();
-}
-
-// 试播拼接：用 setInterval 推进 rc.concatPlay；同步中栏 video
-function rcPlayConcat(){
-  if(rc.timeline.length<1){ toast('时间轴为空'); return; }
-  rcStopConcat();
-  // 起始位置：当前 concatPlay；超过总长则从 0 开始
-  if(rc.concatPlay>=rcSeqTotal()-0.01) rc.concatPlay=0;
-  const speed=1; // 1x
-  let lastTick=performance.now();
-  rc.playConcatTimer=setInterval(()=>{
-    const now=performance.now();
-    const dt=(now-lastTick)/1000; lastTick=now;
-    rc.concatPlay+=dt*speed;
-    if(rc.concatPlay>=rcSeqTotal()){
-      rc.concatPlay=rcSeqTotal();
-      setConcatPlayhead(rc.concatPlay);
-      rcStopConcat();
-      return;
+function openExportNewProjectModal(){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="overlay" data-close="1"><div class="modal" onclick="event.stopPropagation()" style="width:min(420px,100%)">
+    <h3>新建项目 / 影片</h3>
+    <div class="field"><label>项目名称</label><input id="enp-name" style="width:100%" placeholder="如：悬疑短片·旧公寓" autofocus></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="enp-save">创建</button></div>
+  </div></div>`;
+  const overlay=root.querySelector('.overlay');overlay.addEventListener('click',e=>{if(e.target.dataset.close)closeModal();});
+  document.getElementById('enp-name').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('enp-save').click();});
+  document.getElementById('enp-save').addEventListener('click',async()=>{
+    const name=document.getElementById('enp-name').value.trim();if(!name){toast('请输入名称');return;}
+    const p={id:uid(),name}; await putOne('projects',p);
+    exProjectsCache=await getAll('projects');
+    const prj=document.getElementById('ex-project');
+    if(prj){
+      try{ prj.innerHTML='<option value="">全部项目</option><option value="none">未归类</option>'+exProjectsCache.map(x=>`<option value="${esc(x.id)}">${esc(x.name||'未命名')}</option>`).join(''); prj.value=p.id; }catch(_){}
+      curExProject=p.id;
     }
-    setConcatPlayhead(rc.concatPlay);
-  }, 100);
-  const sb=document.getElementById('rc-stop-concat'); if(sb) sb.hidden=false;
-}
-function rcStopConcat(){
-  if(rc.playConcatTimer){ clearInterval(rc.playConcatTimer); rc.playConcatTimer=null; }
-  const sb=document.getElementById('rc-stop-concat'); if(sb) sb.hidden=true;
-  const v=document.getElementById('rc-video'); if(v) v.pause();
-}
-
-// 刻刀：点击片段任意位置，按 (x) 比例切两半
-function rcRazorAt(uid, clientX){
-  const seq=document.getElementById('rc-seq-track');
-  if(!seq) return;
-  const idx = rc.timeline.findIndex(t=>t.uid===uid);
-  if(idx<0) return;
-  const t = rc.timeline[idx];
-  const block = seq.querySelector('[data-uid="'+uid+'"]');
-  if(!block) return;
-  const r = block.getBoundingClientRect();
-  const ratio = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-  const dur = Math.max(0, t.outSec - t.inSec);
-  if(dur<0.1) return;
-  const local = t.inSec + ratio*dur;
-  if(local<=t.inSec+0.04 || local>=t.outSec-0.04){ toast('太靠近端点，不切'); return; }
-  // 切片：保留 t 作为前半（inSec..local），新插入 second 作后半（local..原 outSec）
-  const origOut = t.outSec;
-  t.outSec = local;
-  t.duration = local - t.inSec;
-  const second = { uid:rcUid(), clipId:t.clipId, inSec:local, outSec:origOut, duration:origOut-local };
-  rc.timeline.splice(idx+1, 0, second);
-  rc.activeItemUid = t.uid;
-  renderRcTimeline();
-  toast('已切成两段');
-}
-function addClipFromFile(f){
-  const clip={ id:rcUid(), name:(f.name||'clip').replace(/\.[^.]+$/,'')||'clip', kind:'file', blob:f, filePath:f.path||null, duration:0, blobUrl:null, thumb:null, scrubVideo:null };
-  rc.clips.push(clip);
-  loadClipIntoPreview(clip.id);
-  renderRcClips();
-  genClipThumb(clip);
-}
-function addClipFromAsset(a){
-  const clip={ id:rcUid(), name:a.name||'clip', kind:'asset', blob:a.video.blob, filePath:null, duration:0, blobUrl:null, thumb:null, scrubVideo:null };
-  rc.clips.push(clip);
-  loadClipIntoPreview(clip.id);
-  renderRcClips();
-  genClipThumb(clip);
-}
-async function genClipThumb(clip){
-  try{
-    if(!clip.blob) return;
-    const url = clip.blobUrl || URL.createObjectURL(clip.blob);
-    if(!clip.blobUrl) clip.blobUrl=url;
-    const v = document.createElement('video');
-    v.preload='metadata'; v.muted=true; v.playsInline=true; v.crossOrigin='anonymous';
-    v.src=url;
-    await new Promise((res)=>{ v.onloadedmetadata=res; v.onerror=res; });
-    if(!isFinite(v.duration) || v.duration<=0) return;
-    // 取相对靠近中段的帧做封面（避开黑帧）
-    const seekTo = Math.max(0.1, Math.min(v.duration-0.1, v.duration*0.2));
-    await new Promise((res)=>{ v.onseeked=res; v.onerror=res; v.currentTime=seekTo; });
-    const c=document.createElement('canvas'); c.width=160; c.height=90;
-    const cx=c.getContext('2d');
-    try{ cx.drawImage(v,0,0,160,90); }catch(_){}
-    clip.thumb = c.toDataURL('image/jpeg', 0.7);
-    renderRcClips();
-    if(clip.scrubVideo){
-      clip.scrubVideo.muted=true;
-      clip.scrubVideo.src=url;
-    }
-  }catch(e){ console.warn('genClipThumb',e); }
-}
-function loadClipIntoPreview(clipId){
-  const c=rc.clips.find(x=>x.id===clipId); if(!c) return;
-  if(c.blobUrl) URL.revokeObjectURL(c.blobUrl);
-  c.blobUrl=URL.createObjectURL(c.blob);
-  rc.activeId=clipId;
-  // 取消已选中的时间轴片段（避免轨道显示旧片段的入出点）
-  rc.activeItemUid=null;
-  const v=document.getElementById('rc-video'); v.src=c.blobUrl; v.load();
-  v.onloadedmetadata=()=>{ c.duration=v.duration||0; rc.cur=0; rcUpdateUI(); renderRcClips(); };
-}
-function rcTimeFromX(clientX){
-  const track=document.getElementById('rc-track'); if(!track) return 0;
-  const r=track.getBoundingClientRect();
-  let x=(clientX-r.left)/r.width; x=Math.min(1,Math.max(0,x));
-  const it=rcActiveItem(); const dur=it?it.duration:(rcActiveClip()?rcActiveClip().duration:0);
-  return x*(dur||0);
-}
-function rcSeekOnItem(it,t){ rc.cur=t; const v=document.getElementById('rc-video'); if(v) v.currentTime=t; rcUpdateUI(); }
-function rcUpdateUI(){
-  const it=rcActiveItem(); const dur= it? it.duration : (rcActiveClip()?rcActiveClip().duration:0);
-  const inSec=it?it.inSec:0, outSec=it?it.outSec:(dur||0);
-  const inP=dur?(inSec/dur*100):0, outP=dur?(outSec/dur*100):0;
-  const hi=document.getElementById('rc-handle-in'); if(hi) hi.style.left=inP+'%';
-  const ho=document.getElementById('rc-handle-out'); if(ho) ho.style.left=outP+'%';
-  const sel=document.getElementById('rc-sel'); if(sel){ sel.style.left=inP+'%'; sel.style.width=(outP-inP)+'%'; }
-  const ph=document.getElementById('rc-playhead'); if(ph) ph.style.left=(dur?(rc.cur/dur*100):0)+'%';
-  const ce=document.getElementById('rc-cur'); if(ce) ce.textContent=fmtTime(rc.cur||0);
-  const ie=document.getElementById('rc-in'); if(ie) ie.textContent=fmtTime(inSec);
-  const oe=document.getElementById('rc-out'); if(oe) oe.textContent=fmtTime(outSec);
-  const pe=document.getElementById('rc-preview'); if(pe) pe.textContent=fmtTime(Math.max(0,outSec-inSec));
-  const info=document.getElementById('rc-seq-info'); if(info) info.textContent= rc.timeline.length?('共 '+rc.timeline.length+' 段，总时长 '+fmtTime(rcSeqTotal())):'';
-}
-function rcBindHandle(id, which){
-  const el=document.getElementById(id); if(!el) return;
-  el.addEventListener('pointerdown',(e)=>{
-    e.preventDefault(); e.stopPropagation();
-    try{ el.setPointerCapture(e.pointerId); }catch(_){}
-    const move=(ev)=>{
-      const it=rcActiveItem(); if(!it) return;
-      let t=rcTimeFromX(ev.clientX); t=Math.max(0,Math.min(it.duration||0,t));
-      if(which==='in'){ it.inSec=Math.min(t, it.outSec-0.05); it.inSec=Math.max(0,it.inSec); }
-      else { it.outSec=Math.max(t, it.inSec+0.05); it.outSec=Math.min(it.duration||0, it.outSec); }
-      rcUpdateUI();
-    };
-    const up=()=>{ try{ el.releasePointerCapture(e.pointerId); }catch(_){} el.removeEventListener('pointermove',move); el.removeEventListener('pointerup',up); };
-    el.addEventListener('pointermove',move);
-    el.addEventListener('pointerup',up);
+    await populateProjects();
+    closeModal();toast('已创建项目 ✓');exportRender();
   });
 }
-function rcRenderRuler(){
-  const ruler=document.getElementById('rc-ruler'); if(!ruler) return;
-  ruler.innerHTML='';
-  const n=10;
-  for(let i=0;i<=n;i++){
-    const tick=document.createElement('div');
-    tick.style.cssText='position:absolute;top:0;bottom:0;left:'+(i/n*100)+'%;width:1px;background:rgba(255,255,255,0.14)';
-    ruler.appendChild(tick);
+
+async function exportLoad(){
+  try{ const m=await getOne('meta','exportItems'); exportItems=(m&&Array.isArray(m.value))?m.value:[]; }catch(_){ exportItems=[]; }
+  for(const it of exportItems){
+    it._blobUrl=null;
+    if(it.assetId){ try{ const a=await getOne('assets',it.assetId); if(a&&a.video&&a.video.blob){ it._blobUrl=URL.createObjectURL(a.video.blob); if(!it.duration){ it.duration=await exProbeDuration(it._blobUrl,'video'); it.durationFmt=exFmtDuration(it.duration); exportSave(); } } }catch(_){} }
+    else if(it.srcPath && window.filemgr){ window.filemgr.readBlob(it.srcPath).then(async buf=>{ if(buf){ it._blobUrl=URL.createObjectURL(new Uint8Array(buf)); if(!it.duration){ it.duration=await exProbeDuration(it._blobUrl,it.kind); it.durationFmt=exFmtDuration(it.duration); exportSave(); } exportRender(); } }).catch(()=>{}); }
   }
 }
-function renderRcClips(){
-  const box=document.getElementById('rc-clips'); if(!box) return;
-  const cnt=document.getElementById('rc-clips-count');
-  if(cnt) cnt.textContent='（'+rc.clips.length+'）';
-  if(!rc.clips.length){ box.innerHTML='<div class="meta" style="margin:auto;text-align:center;padding:20px 0;color:#888">还没有视频。点「导入视频」或从成片资产选择。</div>'; return; }
-  box.innerHTML='';
-  rc.clips.forEach(c=>{
-    const wrap=document.createElement('div');
-    wrap.className='rc-clip-card';
-    wrap.draggable=true;
-    wrap.dataset.clipId=c.id;
-    wrap.style.cssText='position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:grab;user-select:none';
-    if(c.id===rc.activeId) wrap.style.borderColor='var(--accent)';
-    const dur = fmtTime(c.duration||0);
-    const thumb = c.thumb ? `<img src="${c.thumb}" style="width:100%;height:100%;object-fit:cover;display:block">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#888;font-size:11px;background:linear-gradient(135deg,#1c1c22,#0a0a0a)">载入中…</div>`;
-    wrap.innerHTML = `
-      <div class="rc-clip-thumb" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden">
-        ${thumb}
-        <video class="rc-clip-scrub" preload="none" muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#000"></video>
-        <div class="rc-clip-scrubbar" style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,0.18);opacity:0;transition:opacity .12s;pointer-events:none">
-          <div class="rc-clip-scrubfill" style="height:100%;width:0;background:#ff5c8a"></div>
-        </div>
-        <div style="position:absolute;right:4px;bottom:6px;font-size:10px;color:#fff;background:rgba(0,0,0,0.55);padding:1px 5px;border-radius:3px">${dur}</div>
+function exportSave(){ try{ putOne('meta',{id:'exportItems', value:exportItems.map(it=>({id:it.id,name:it.name,srcPath:it.srcPath||null,srcDir:it.srcDir||null,assetId:it.assetId||null,kind:it.kind,ext:it.ext,projectId:it.projectId||'',projectName:it.projectName||'',duration:it.duration||0,durationFmt:it.durationFmt||''}))}); }catch(_){} }
+
+async function exportAddFiles(){
+  if(!window.filemgr){ toast('此功能需桌面版（Electron）'); return; }
+  const files=await window.filemgr.selectFiles();
+  if(files&&files.length){ for(const f of files) exportAddFileObj(f); exportSave(); exportRender(); }
+}
+function exportAddFileObj(f){
+  const kind=exKindOf(f);
+  const p=(f.path||f.filePath||null);
+  const name=(f.name||'clip');
+  const ext=exExtOf(name)||(kind==='audio'?'wav':kind==='image'?'png':'mp4');
+  const prjId=(document.getElementById('ex-project')||{}).value||'';
+  const srcDir=exDirOf(p);
+  const item={ id:exUid(), name:exStripExt(name)||'clip', srcPath:p, srcDir, assetId:null, kind, ext, _blobUrl:null, projectId:prjId, projectName:exProjectNameFor(prjId)||exFolderName(srcDir)||'', duration:0, durationFmt:'--:--' };
+  if(p && window.filemgr){ window.filemgr.readBlob(p).then(async buf=>{ if(buf){ item._blobUrl=URL.createObjectURL(new Uint8Array(buf)); item.duration=await exProbeDuration(item._blobUrl,kind); item.durationFmt=exFmtDuration(item.duration); exportSave(); exportRender(); } }).catch(()=>{}); }
+  exportItems.push(item);
+}
+
+function exportRender(){
+  const list=document.getElementById('ex-list'); if(!list) return;
+  const empty=document.getElementById('ex-empty');
+  const cnt=document.getElementById('ex-count');
+  const view=exView();
+  if(cnt) cnt.textContent='（'+view.length+' 项）';
+  if(!exportItems.length){ list.innerHTML=''; if(empty){ empty.style.display='block'; empty.textContent='还没有素材。点「导入文件」、从成片库选，或直接把视频/音频/图片文件拖到这里。';} return; }
+  if(empty) empty.style.display='none';
+  if(!view.length){ list.innerHTML='<div class="meta" style="text-align:center;padding:30px 0">当前项目筛选下没有素材。</div>'; exportRenderPreview(); return; }
+  list.innerHTML='';
+  const groups={video:{icon:'🎬',label:'视频'}, audio:{icon:'🎵',label:'音频'}, image:{icon:'🖼',label:'图片'}};
+  const byKind={video:[], audio:[], image:[]};
+  view.forEach(it=>{ (byKind[it.kind]||byKind.video).push(it); });
+  Object.keys(groups).forEach(kind=>{
+    const arr=byKind[kind]; if(!arr.length) return;
+    const g=document.createElement('div'); g.className='ex-group'; g.dataset.kind=kind;
+    g.innerHTML=`<div class="ex-group-title">${groups[kind].icon} ${groups[kind].label} <span class="cnt">${arr.length}</span></div><div class="ex-group-list"></div>`;
+    const grid=g.querySelector('.ex-group-list');
+    arr.forEach((it, i)=> grid.appendChild(buildExportCard(it, i)) );
+    list.appendChild(g);
+  });
+  exportRenderPreview();
+}
+function buildExportCard(it, idx){
+  const card=document.createElement('div');
+  card.className='ex-card'; card.draggable=true; card.dataset.id=it.id;
+  const isAudio=it.kind==='audio', isImage=it.kind==='image';
+  let thumbInner='';
+  if(isAudio) thumbInner=`<div class="ex-audio-thumb"><div class="ex-audio-icon">🎵</div></div>`;
+  else if(isImage) thumbInner=`<img class="ex-img-thumb" src="${it._blobUrl||''}" alt="" onload="this.style.opacity=1" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"><div class="ex-img-ph">🖼</div>`;
+  else thumbInner=`<video class="ex-scrub" preload="metadata" muted playsinline></video>`;
+  const source = it.projectName ? `项目：${esc(it.projectName)}` : (it.srcDir ? `文件夹：${esc(exFolderName(it.srcDir))}` : '');
+  const metaLine = (isImage ? '图片' : (it.durationFmt||'--:--')) + (source ? ' · '+source : '');
+  card.innerHTML=`
+    <div class="ex-thumb">
+      ${thumbInner}
+      <div class="ex-scrubbar"><div class="ex-scrubfill"></div></div>
+      <div class="ex-idx">#${idx+1}</div>
+      <div class="ex-kind">${isAudio?'音频':isImage?'图片':'视频'}</div>
+    </div>
+    <div class="ex-info">
+      <div class="ex-name" title="${esc(it.name)}">${esc(it.name)}<span class="ex-ext">.${it.ext}</span></div>
+      <div class="ex-meta">${metaLine}</div>
+      <div class="ex-newname"></div>
+      <div class="ex-actions">
+        <span class="ex-draghint">⠿ 拖动排序</span>
+        <button class="ex-del" title="移除">✕</button>
       </div>
-      <div style="padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:4px">
-        <div title="${c.name.replace(/"/g,'&quot;')}" style="font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${c.name}</div>
-        <button class="rc-clip-del" title="移除视频源" style="background:transparent;border:none;color:#888;font-size:14px;cursor:pointer;padding:0 4px">✕</button>
-      </div>
-    `;
-    // hover scrub：鼠标进入显示 video，mousemove 改 currentTime
-    const thumbEl = wrap.querySelector('.rc-clip-thumb');
-    const scrubV = wrap.querySelector('.rc-clip-scrub');
-    const sb = wrap.querySelector('.rc-clip-scrubbar');
-    const fill = wrap.querySelector('.rc-clip-scrubfill');
-    let scrubInited=false;
-    const initScrub=()=>{
-      if(scrubInited) return;
-      if(!c.blobUrl) c.blobUrl=URL.createObjectURL(c.blob);
+    </div>`;
+  card.querySelector('.ex-del').onclick=(e)=>{ e.stopPropagation(); const i=exportItems.findIndex(x=>x.id===it.id); if(i>=0){exportItems.splice(i,1); exportSave(); exportRender();} };
+  card.addEventListener('dblclick',(e)=>{ if(e.target.closest('.ex-del,.ex-actions')) return; openExportPreview(it); });
+  card.addEventListener('dragstart',(e)=>{ e.dataTransfer.setData('text/ex-id', it.id); e.dataTransfer.effectAllowed='move'; card.classList.add('dragging'); });
+  card.addEventListener('dragend',()=>{ document.querySelectorAll('.ex-card').forEach(c=>c.classList.remove('dragging','drag-over')); });
+  card.addEventListener('dragover',(e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; card.classList.add('drag-over'); });
+  card.addEventListener('dragleave',()=>{ card.classList.remove('drag-over'); });
+  card.addEventListener('drop',(e)=>{
+    e.preventDefault(); e.stopPropagation(); card.classList.remove('drag-over');
+    const id=e.dataTransfer.getData('text/ex-id');
+    if(id&&id!==it.id){ const from=exportItems.findIndex(x=>x.id===id); const to=exportItems.findIndex(x=>x.id===it.id); if(from>=0&&to>=0 && exportItems[from].kind===exportItems[to].kind){ const mv=exportItems.splice(from,1)[0]; const newTo=exportItems.findIndex(x=>x.id===it.id); exportItems.splice(newTo>=0?newTo:to,0,mv); exportSave(); exportRender(); } }
+  });
+  if(!isAudio && !isImage){
+    const thumbEl=card.querySelector('.ex-thumb');
+    const scrubV=card.querySelector('.ex-scrub');
+    const sb=card.querySelector('.ex-scrubbar');
+    const fill=card.querySelector('.ex-scrubfill');
+    let inited=false, pending=null;
+    const initScrub=()=>{ if(inited||!it._blobUrl) return; if(!scrubV.src) scrubV.src=it._blobUrl; inited=true; scrubV.addEventListener('loadedmetadata',()=>{ if(pending!==null){ applyRatio(pending); pending=null; } },{once:true}); };
+    const applyRatio=(r)=>{ if(!scrubV.duration||!isFinite(scrubV.duration)) return false; try{ scrubV.currentTime=Math.max(0,Math.min(scrubV.duration,r*scrubV.duration)); }catch(_){ return false; } fill.style.width=(r*100)+'%'; return true; };
+    thumbEl.addEventListener('mouseenter',()=>{ initScrub(); if(it._blobUrl) sb.style.opacity='1'; });
+    thumbEl.addEventListener('mousemove',(e)=>{ if(!it._blobUrl) return; if(!inited) initScrub(); const r=thumbEl.getBoundingClientRect(); const ratio=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)); pending=ratio; if(!applyRatio(ratio)) return; if(scrubV.readyState>=2){ if(scrubV.paused) scrubV.play().catch(()=>{}); } });
+    thumbEl.addEventListener('mouseleave',()=>{ pending=null; try{ scrubV.pause(); scrubV.currentTime=0; }catch(_){} sb.style.opacity='0'; fill.style.width='0'; });
+    if(it._blobUrl && !scrubV.src){ try{ scrubV.src=it._blobUrl; }catch(_){} }
+  }
+  return card;
+}
+function openExportPreview(it){
+  if(!it._blobUrl){ toast('预览尚未加载完成'); return; }
+  const root=document.getElementById('modal-root'); if(!root) return;
+  let body='';
+  if(it.kind==='image') body=`<img src="${it._blobUrl}" style="max-width:100%;max-height:70vh;border-radius:8px;display:block;margin:0 auto">`;
+  else if(it.kind==='audio') body=`<div style="text-align:center;padding:30px 0"><div style="font-size:60px;margin-bottom:16px">🎵</div><div style="font-size:16px;margin-bottom:20px;color:var(--text)">${esc(it.name)}.${it.ext}</div><audio controls autoplay src="${it._blobUrl}" style="width:100%"></audio></div>`;
+  else body=`<video controls autoplay src="${it._blobUrl}" style="max-width:100%;max-height:70vh;border-radius:8px;display:block;margin:0 auto"></video>`;
+  root.innerHTML=`<div class="overlay" data-close="1" onclick="if(event.target===this)closeModal()"><div class="modal" onclick="event.stopPropagation()" style="width:min(900px,100%);max-height:92vh;display:flex;flex-direction:column"><h3>${esc(it.name)}.${it.ext}</h3><div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:var(--bg2);border-radius:8px;padding:10px">${body}</div><div style="margin-top:10px;text-align:right"><button class="btn" onclick="closeModal()">关闭</button></div></div></div>`;
+}
+function exportRenderPreview(){
+  const on=document.getElementById('ex-rename-on'); if(!on||!on.checked){ document.querySelectorAll('.ex-newname').forEach(el=>el.textContent=''); return; }
+  const prefix=document.getElementById('ex-prefix').value, suffix=document.getElementById('ex-suffix').value;
+  let seq=parseInt(document.getElementById('ex-seq-start').value)||1;
+  const digits=Math.max(1,parseInt(document.getElementById('ex-digits').value)||3);
+  document.querySelectorAll('.ex-card').forEach((card,i)=>{
+    const el=card.querySelector('.ex-newname'); if(!el) return;
+    const it=exportItems.find(x=>x.id===card.dataset.id); if(!it) return;
+    el.textContent='→ '+prefix+String(seq+i).padStart(digits,'0')+suffix+'.'+it.ext;
+  });
+}
+async function exportDoExport(){
+  if(!window.filemgr){ toast('此功能需桌面版（Electron）'); return; }
+  const items=exView();
+  if(!items.length){ toast('当前筛选下没有可导出的素材'); return; }
+  let dir=document.getElementById('ex-dir').value.trim();
+  if(!dir){ dir=await window.filemgr.selectDir(); if(!dir) return; document.getElementById('ex-dir').value=dir; }
+  const useRename=document.getElementById('ex-rename-on').checked;
+  const prefix=document.getElementById('ex-prefix').value, suffix=document.getElementById('ex-suffix').value;
+  const digits=Math.max(1,parseInt(document.getElementById('ex-digits').value)||3);
+  const startSeq=parseInt(document.getElementById('ex-seq-start').value)||1;
+  const KIND_DIRS={video:'视频', audio:'音频', image:'图片'};
+  let okN=0, failN=0, seq=startSeq;
+  for(const kind of ['video','audio','image']){
+    const group=items.filter(it=>it.kind===kind); if(!group.length) continue;
+    const subDir=exJoin(dir, KIND_DIRS[kind]);
+    for(const it of group){
+      const ext=it.ext?('.'+it.ext):'';
+      const base=useRename? (prefix+String(seq).padStart(digits,'0')+suffix) : it.name;
+      if(useRename) seq++;
+      let dst=exJoin(subDir, base+ext);
+      let n=1, cand=dst;
+      while(await window.filemgr.exists(cand)){ n++; cand=exJoin(subDir, base+'_'+n+ext); }
+      dst=cand;
       try{
-        scrubV.src=c.blobUrl;
-        scrubV.muted=true; scrubV.preload='auto';
-        scrubV.load();
-        scrubInited=true;
-      }catch(_){}
-    };
-    thumbEl.addEventListener('mouseenter',()=>{
-      initScrub();
-      scrubV.style.display='block';
-      sb.style.opacity='1';
-      scrubV.play().catch(()=>{});
-    });
-    thumbEl.addEventListener('mousemove',(e)=>{
-      if(!scrubV.duration || !isFinite(scrubV.duration)) return;
-      const r = thumbEl.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-      try{ scrubV.currentTime = ratio * scrubV.duration; }catch(_){}
-      fill.style.width = (ratio*100)+'%';
-    });
-    thumbEl.addEventListener('mouseleave',()=>{
-      try{ scrubV.pause(); scrubV.currentTime=0; }catch(_){}
-      scrubV.style.display='none';
-      sb.style.opacity='0';
-      fill.style.width='0';
-    });
-    // click = select (and ignore clicks on the X button)
-    wrap.addEventListener('click',(e)=>{
-      if(e.target.classList.contains('rc-clip-del')){
-        e.stopPropagation();
-        rc.clips=rc.clips.filter(x=>x.id!==c.id);
-        if(rc.activeId===c.id){ rc.activeId=null; const v=document.getElementById('rc-video'); if(v) v.removeAttribute('src'); }
-        renderRcClips(); renderRcTimeline(); rcUpdateUI();
-        return;
-      }
-      loadClipIntoPreview(c.id);
-      renderRcClips();
-    });
-    wrap.addEventListener('dragstart',(e)=>{
-      e.dataTransfer.setData('text/rc-clip', c.id);
-      e.dataTransfer.effectAllowed='copy';
-    });
-    box.appendChild(wrap);
-  });
-}
-function rcAddToTimeline(clipId, inSec, outSec){
-  const c=rc.clips.find(x=>x.id===clipId); if(!c){ toast('视频源不存在'); return; }
-  const item={ uid:rcUid(), clipId, inSec:(inSec||0), outSec:(outSec||c.duration), duration:c.duration };
-  rc.timeline.push(item);
-  rc.activeItemUid=item.uid;
-  loadClipIntoPreview(clipId);
-  renderRcTimeline(); rcUpdateUI();
-  toast('已加入时间轴：'+c.name);
-}
-function renderRcTimeline(){
-  const seq=document.getElementById('rc-seq-track'); if(!seq) return;
-  // 清掉旧块（保留 playhead 元素）
-  [...seq.querySelectorAll('[data-uid]')].forEach(el=>el.remove());
-  const oldEmpty=seq.querySelector('.rc-seq-empty'); if(oldEmpty) oldEmpty.remove();
-  const cnt=document.getElementById('rc-seq-info');
-  if(cnt) cnt.textContent='共 '+rc.timeline.length+' 段，拼接总长 '+fmtTime(rcSeqTotal());
-  if(!rc.timeline.length){
-    const tip=document.createElement('div');
-    tip.className='rc-seq-empty';
-    tip.style.cssText='margin:auto;color:#888;font-size:12px';
-    tip.textContent='把左侧视频拖到这里开始拼接…';
-    seq.appendChild(tip);
-    updateConcatPlayheadPos();
-    return;
+        if(it.srcPath){ await window.filemgr.copy(it.srcPath, dst); okN++; }
+        else if(it.assetId){ const a=await getOne('assets',it.assetId); if(a&&a.video&&a.video.blob){ const ab=await a.video.blob.arrayBuffer(); await window.filemgr.writeBlob(dst, Array.from(new Uint8Array(ab))); okN++; } else failN++; }
+        else failN++;
+      }catch(e){ failN++; }
+    }
   }
-  seq.style.cursor = 'crosshair';
-  rc.timeline.forEach((it,idx)=>{
-    const c=rc.clips.find(x=>x.id===it.clipId);
-    const dur=Math.max(0, it.outSec-it.inSec);
-    const block=document.createElement('div');
-    block.draggable=true; block.dataset.uid=it.uid;
-    const px=Math.max(84, Math.round(dur*8));
-    block.style.cssText='position:relative;flex:none;width:'+px+'px;min-height:88px;background:linear-gradient(#23202b,#1a1822);border:1px solid #4a2a3a;border-radius:6px;overflow:hidden;cursor:pointer';
-    if(it.uid===rc.activeItemUid){
-      block.style.borderColor='var(--accent)';
-      block.style.boxShadow='0 0 0 1px rgba(255,92,138,.55)';
-    }
-    const inP=dur? it.inSec/(it.duration||dur)*100:0, outP=dur? it.outSec/(it.duration||dur)*100:100;
-    const nameEsc = c? c.name : '?';
-    const thumbBg = (c && c.thumb) ? `background-image:url('${c.thumb.replace(/'/g,"\\'")}');background-size:cover;background-position:center;` : '';
-    block.innerHTML =
-        '<div style="position:absolute;inset:0;'+thumbBg+'opacity:.6"></div>'+
-        '<div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.70))"></div>'+
-        '<div style="position:absolute;left:4px;top:3px;font-size:11px;color:#fff;font-weight:600;text-shadow:0 1px 2px #000">'+(idx+1)+'. '+nameEsc+'</div>'+
-        '<div style="position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none">'+
-          '<div style="position:absolute;top:0;bottom:0;left:'+inP+'%;width:'+Math.max(0,outP-inP)+'%;background:rgba(255,80,120,.30);border-left:2px solid #ff6b81;border-right:2px solid #ff6b81"></div>'+
-        '</div>'+
-        '<div style="position:absolute;left:4px;bottom:3px;font-size:10px;color:#fff;text-shadow:0 1px 2px #000">'+fmtTime(dur)+'</div>'+
-        '<div data-del="'+it.uid+'" title="移除片段" style="position:absolute;right:3px;top:3px;font-size:11px;color:#fff;cursor:pointer;background:rgba(0,0,0,.55);border-radius:4px;padding:0 4px">✕</div>';
-    block.addEventListener('click',(e)=>{
-      if(e.target.dataset.del){
-        e.stopPropagation();
-        rc.timeline=rc.timeline.filter(t=>t.uid!==it.uid);
-        if(rc.activeItemUid===it.uid) rc.activeItemUid=null;
-        renderRcTimeline(); rcUpdateUI();
-        return;
-      }
-      if(rc.tool==='razor'){
-        e.stopPropagation();
-        rcRazorAt(it.uid, e.clientX);
-        return;
-      }
-      // select tool：选中并把 concatPlay 移到此块起点
-      rc.activeItemUid=it.uid;
-      loadClipIntoPreview(it.clipId);
-      let cum=0;
-      for(const tt of rc.timeline){
-        if(tt.uid===it.uid) break;
-        cum += Math.max(0, tt.outSec-tt.inSec);
-      }
-      setConcatPlayhead(cum);
-      renderRcTimeline(); rcUpdateUI();
-    });
-    block.addEventListener('dragstart',(e)=>{ e.dataTransfer.setData('text/rc-seq', it.uid); e.dataTransfer.effectAllowed='move'; });
-    seq.appendChild(block);
-  });
-  updateConcatPlayheadPos();
+  toast('✅ 复制成功 '+okN+' 个'+(failN?('，失败 '+failN):'')+' → '+dir);
 }
-// 跟随 scroll 重算 concat playhead 的可视位置
-function updateConcatPlayheadPos(){
-  const ph=document.getElementById('rc-concat-playhead');
-  const seq=document.getElementById('rc-seq-track'); if(!ph || !seq) return;
-  if(!rc.timeline.length){ ph.style.display='none'; return; }
-  ph.style.display='block';
-  const total=Math.max(0.001, rcSeqTotal());
-  const ratio=Math.max(0, Math.min(1, rc.concatPlay/total));
-  // playhead 实际位置 = ratio * scrollWidth - scrollLeft，钳制在可视区内
-  const sw=seq.scrollWidth, sl=seq.scrollLeft, cw=seq.clientWidth;
-  let left = ratio*sw - sl;
-  if(left<0) left=0;
-  if(left>cw) left=cw;
-  ph.style.left = left+'px';
+/* ===================== 皮肤系统 ===================== */
+const SKIN_DEFS = {
+  A:{name:'专业剪辑黑', pals:[['graphite','石墨'],['bronze','青铜'],['crimson','暗红'],['pine','墨绿']]},
+  B:{name:'玻璃拟态', pals:[['sakura','樱粉'],['peach','蜜桃'],['lilac','淡紫'],['mint','薄荷']]},
+  BC:{name:'玻璃霓虹', pals:[['classic','经典粉'],['mc','品红青'],['red','烈焰红'],['vio','星河紫'],['grn','极光绿'],['pea','蜜桃粉'],['blu','冰蓝'],['gold','金橙']]},
+  D:{name:'自然玻璃', pals:[['sage','苔绿'],['mist','雾蓝'],['dawn','晨粉'],['sand','沙金'],['salvia','鼠尾草'],['sky','天青']]},
+  E:{name:'明亮科技玻璃', pals:[['ice','冰蓝'],['silver','银白'],['cyan','青空'],['indigo','靛蓝'],['softv','雾紫'],['mint2','薄荷']]}
+};
+const SKIN_ORDER = ['A','B','BC','D','E'];
+const SKIN_BG = {A:'#0d0d0f', B:'#2a1a28', BC:'#0a0410', D:'linear-gradient(135deg,#7eb0c9,#9bcbb0)', E:'#e3edf6'};
+const PAL_ACCENT = {
+  A:{graphite:'#8a93a6',bronze:'#c08a5a',crimson:'#c4506a',pine:'#5a9a7a'},
+  B:{sakura:'#ff9ec4',peach:'#ffb3a0',lilac:'#c4a9e8',mint:'#9ee8c4'},
+  BC:{classic:'#ff5c8a',mc:'#ff2d95',red:'#ff3b3b',vio:'#b14bff',grn:'#2bff9e',pea:'#ff5ca8',blu:'#3b9bff',gold:'#ffb13b'},
+  D:{sage:'#6fa88a',mist:'#7eb0c9',dawn:'#d9a0a8',sand:'#d4b896',salvia:'#7fae9a',sky:'#6bb3c9'},
+  E:{ice:'#2d9dff',silver:'#7a8fa6',cyan:'#00bcd4',indigo:'#546de5',softv:'#9b87d9',mint2:'#4ecdc4'}
+};
+let curSkin=null, curExProject='';
+
+function applyBgMode(mode){
+  const user=document.getElementById('bg-user'); if(!user) return;
+  if(mode==='cover'){ user.style.backgroundSize='cover'; user.style.backgroundPosition='center'; user.style.backgroundRepeat='no-repeat'; }
+  else if(mode==='stretch'){ user.style.backgroundSize='100% 100%'; user.style.backgroundPosition='center'; user.style.backgroundRepeat='no-repeat'; }
+  else { user.style.backgroundSize='auto'; user.style.backgroundPosition='left top'; user.style.backgroundRepeat='repeat'; }
 }
-function rcSeqReorder(dragUid, clientX){
-  const seq=document.getElementById('rc-seq-track'); if(!seq) return;
-  const blocks=[...seq.querySelectorAll('[data-uid]')];
-  let targetIdx=blocks.length;
-  for(let i=0;i<blocks.length;i++){ const r=blocks[i].getBoundingClientRect(); if(clientX < r.left+r.width/2){ targetIdx=i; break; } }
-  const from=rc.timeline.findIndex(t=>t.uid===dragUid); if(from<0) return;
-  const item=rc.timeline.splice(from,1)[0];
-  if(from<targetIdx) targetIdx--;
-  rc.timeline.splice(targetIdx,0,item);
-  renderRcTimeline();
+function titleBarForSkin(s){
+  const pal=s.pal;
+  const map={
+    A:{color:'#0d0d0f',symbolColor:'#e8e8ea'},
+    B:{color:'#16101c',symbolColor:'#f8f0f4'},
+    BC:{color:'#0d0614',symbolColor:'#ffe9f6'},
+    D:{
+      sage:{color:'#c8d8cc',symbolColor:'#2a3a30'},
+      mist:{color:'#c8dce4',symbolColor:'#2a3a42'},
+      dawn:{color:'#e8d6d8',symbolColor:'#4a3a3c'},
+      sand:{color:'#e4d8c8',symbolColor:'#4a4034'},
+      salvia:{color:'#d0ddd4',symbolColor:'#2f3f38'},
+      sky:{color:'#c8e0e8',symbolColor:'#2a3a42'}
+    },
+    E:{color:'#e3edf6',symbolColor:'#334455'}
+  };
+  const ov = s.skin==='D' ? (map.D[pal] || map.D.mist) : map[s.skin];
+  if(window.vaultApp && window.vaultApp.setTitleBarOverlay){
+    window.vaultApp.setTitleBarOverlay(ov).catch(()=>{});
+  }
 }
-async function doRoughcutConcat(){
-  if(rc.timeline.length<2){ toast('时间轴至少需要 2 个片段才能拼接'); return; }
-  const mode = 'fast'; // 流拷贝模式（速度极快；如需精确用 -ss 在 -i 前，可加按钮切换）
-  const outName = (document.getElementById('rc-out-name') && document.getElementById('rc-out-name').value.trim()) || '拼接成片';
-  toast('正在拼接（共 '+rc.timeline.length+' 段）…');
-  const segs=[];
-  try{
-    for(let i=0;i<rc.timeline.length;i++){
-      const it=rc.timeline[i]; const c=rc.clips.find(x=>x.id===it.clipId); if(!c) continue;
-      let srcPath=c.filePath;
-      if(!srcPath){
-        const ab=await c.blob.arrayBuffer();
-        const r=await window.roughcut.saveBlob({name:c.name||'clip', ext:'mp4', data:new Uint8Array(ab)});
-        if(!r||!r.ok){ toast('临时文件写入失败：'+(r&&r.error||'')); return; }
-        srcPath=r.path;
-      }
-      const segName=(outName||'clip')+'_'+(i+1);
-      const r=await window.roughcut.cut({src:srcPath, inSec:it.inSec, outSec:it.outSec, outName:segName, mode});
-      if(r&&r.ok) segs.push(r.outPath); else { toast('第'+(i+1)+'段裁切失败：'+(r&&r.error||'未知')); return; }
-    }
-  }catch(e){ toast('拼接准备失败：'+e.message); return; }
-  const r=await window.roughcut.concat({segments:segs, outName});
-  if(r&&r.ok){ toast('✅ 已拼接：'+(r.outPath.split(/[\\/]/).pop())); }
-  else{ toast('❌ 拼接失败：'+(r&&r.error||'未知')); }
+function applySkin(s){
+  document.body.dataset.skin=s.skin; document.body.dataset.pal=s.pal;
+  const scene=document.getElementById('bg-scene'), user=document.getElementById('bg-user');
+  if(s.skin==='D'){
+    if(s.dImg){ user.style.backgroundImage='url("'+s.dImg+'")'; applyBgMode(s.dMode||'cover'); document.body.dataset.userbg='true'; }
+    else { scene.dataset.bg=s.dBg||'mountain'; document.body.dataset.userbg='false'; user.style.backgroundImage=''; }
+  } else { document.body.dataset.userbg='false'; if(user) user.style.backgroundImage=''; }
+  titleBarForSkin(s);
+  saveSkin(s);
+}
+function saveSkin(s){ try{ putOne('meta',{id:'skin',value:s}); }catch(_){} }
+
+async function loadSkin(){
+  let s=null; try{ const m=await getOne('meta','skin'); if(m&&m.value) s=m.value; }catch(_){}
+  if(!s||!SKIN_DEFS[s.skin]) s={skin:'BC',pal:'classic',dBg:'mountain',dImg:null,dMode:'cover'};
+  if(!SKIN_DEFS[s.skin].pals.some(p=>p[0]===s.pal)) s.pal=SKIN_DEFS[s.skin].pals[0][0];
+  curSkin=s; applySkin(s);
 }
 
+function renderPalRow(){
+  const row=document.getElementById('skin-pal-row'); if(!row) return;
+  const def=SKIN_DEFS[curSkin.skin];
+  row.innerHTML=def.pals.map(p=>`<div class="skin-opt${p[0]===curSkin.pal?' on':''}" data-pal="${p[0]}"><div class="skin-sw" style="background:${SKIN_BG[curSkin.skin]||'#222'}"><span class="sw-dot" style="background:${PAL_ACCENT[curSkin.skin][p[0]]}"></span></div><div class="nm">${p[1]}</div></div>`).join('');
+  row.querySelectorAll('.skin-opt').forEach(o=>o.onclick=()=>{ curSkin.pal=o.dataset.pal; applySkin(curSkin); renderPalRow(); });
+}
+function renderBgRow(){
+  const row=document.getElementById('skin-bg-row'); if(!row) return;
+  const bgs=[['mountain','山峦云雾'],['forest','深林晨光'],['ocean','海浪暮色'],['starry','星空旷野']];
+  const onBg = curSkin.dImg? null : (curSkin.dBg||'mountain');
+  row.innerHTML=bgs.map(b=>`<button class="btn${b[0]===onBg?' on':''}" data-bg="${b[0]}">${b[1]}</button>`).join('') + (curSkin.dImg?' <span class="skin-clear">已用自定义图片（'+ (curSkin.dMode==='stretch'?'拉伸':curSkin.dMode==='tile'?'拼接':'铺满') +'）</span>':'');
+  row.querySelectorAll('button[data-bg]').forEach(o=>o.onclick=()=>{ curSkin.dBg=o.dataset.bg; curSkin.dImg=null; applySkin(curSkin); renderBgRow(); });
+}
+function closeSkinModal(){ const o=document.getElementById('skin-overlay'); if(o) o.remove(); }
+function openSkinModal(){
+  const root=document.getElementById('modal-root'); if(!root) return;
+  const s=curSkin||{skin:'BC',pal:'classic',dBg:'mountain',dImg:null,dMode:'cover'};
+  let html='<div class="overlay" id="skin-overlay"><div class="modal" style="width:min(660px,100%)">'
+    +'<h3>🎨 皮肤设置 <small>切换风格与配色，自动保存、刷新不变</small></h3>';
+  html+='<div class="skin-section"><span class="lbl">布局风格（每类风格有自己专属的配色家族）</span><div class="skin-row" id="skin-layout-row">';
+  SKIN_ORDER.forEach(k=>{
+    const def=SKIN_DEFS[k]; const on=k===s.skin?' on':'';
+    const dotpal = (k===s.skin)? s.pal : def.pals[0][0];
+    html+=`<div class="skin-opt${on}" data-skin="${k}"><div class="skin-sw" style="background:${SKIN_BG[k]}"><span class="sw-dot" style="background:${PAL_ACCENT[k][dotpal]}"></span></div><div class="nm">${def.name}</div></div>`;
+  });
+  html+='</div></div>';
+  html+='<div class="skin-section"><span class="lbl">本风格配色</span><div class="skin-row" id="skin-pal-row"></div></div>';
+  html+=`<div class="skin-section" id="skin-d-bg" style="${s.skin==='D'?'':'display:none'}"><span class="lbl">自然玻璃背景底图（可上传自己的图片，支持铺满 / 拉伸 / 拼接）</span><div class="skin-row" id="skin-bg-row"></div>`
+    +`<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" id="skin-upload">📁 上传自定义</button><input type="file" id="skin-file" accept="image/*" hidden>`
+    +`<span class="skin-clear">自适应：</span><button class="btn skin-mode${s.dMode!=='stretch'&&s.dMode!=='tile'?' on':''}" data-mode="cover">铺满</button><button class="btn skin-mode${s.dMode==='stretch'?' on':''}" data-mode="stretch">拉伸</button><button class="btn skin-mode${s.dMode==='tile'?' on':''}" data-mode="tile">拼接</button>`
+    +`<button class="btn" id="skin-bg-reset">↩ 恢复默认</button></div></div>`;
+  html+='<div style="margin-top:12px;text-align:right"><button class="btn primary" id="skin-close">完成</button></div>';
+  html+='</div></div>';
+  root.innerHTML=html;
+  const overlay=document.getElementById('skin-overlay');
+  overlay.onclick=(e)=>{ if(e.target===overlay) closeSkinModal(); };
+  document.getElementById('skin-close').onclick=closeSkinModal;
+  document.getElementById('skin-layout-row').querySelectorAll('.skin-opt').forEach(o=>o.onclick=()=>{
+    const ns=o.dataset.skin; const def=SKIN_DEFS[ns];
+    let np=s.pal; if(!def.pals.some(p=>p[0]===np)) np=def.pals[0][0];
+    curSkin={skin:ns,pal:np,dBg:s.dBg||'mountain',dImg:s.dImg||null,dMode:s.dMode||'cover'};
+    applySkin(curSkin); openSkinModal();
+  });
+  renderPalRow(); renderBgRow();
+  const up=document.getElementById('skin-upload'), fu=document.getElementById('skin-file');
+  up.onclick=()=>fu.click();
+  fu.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ curSkin.dImg=r.result; curSkin.dBg=curSkin.dBg||'mountain'; applySkin(curSkin); renderBgRow(); }; r.readAsDataURL(f); };
+  document.querySelectorAll('.skin-mode').forEach(b=>b.onclick=()=>{ curSkin.dMode=b.dataset.mode; applySkin(curSkin); document.querySelectorAll('.skin-mode').forEach(x=>x.classList.toggle('on',x===b)); });
+  document.getElementById('skin-bg-reset').onclick=()=>{ curSkin.dImg=null; applySkin(curSkin); renderBgRow(); };
+}
+const skinBtn=document.getElementById('skin-btn'); if(skinBtn) skinBtn.onclick=openSkinModal;
+
+/* 导出整理：按项目筛选 */
+function exView(){
+  const fp=(document.getElementById('ex-project')||{}).value||'';
+  if(!fp) return exportItems;
+  return exportItems.filter(it=> it.projectId===fp || (fp==='none' && !it.projectId));
+}
+
+loadSkin();
 boot();
 </script>
 <!-- 拼音首字母库（离线可用，供镜号项目名转 XLXM）。pinyin-pro 由 jsDelivr +esm 打包 -->
