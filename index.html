@@ -488,7 +488,7 @@
   .skin-clear{font-size:11px;color:var(--muted);margin-top:4px}
 </style>
 </head>
-<body data-skin="BC" data-pal="classic">
+<body data-skin="E" data-pal="ice">
 <!-- 皮肤背景层（D 自然玻璃风景 / 用户上传） -->
 <div class="bg-scene" id="bg-scene" data-bg="mountain"><div class="sky"></div><div class="sun"></div><div class="cloud"></div><div class="mountain far"></div><div class="mountain near"></div><div class="mist"></div></div>
 <div class="bg-user" id="bg-user"></div>
@@ -3713,7 +3713,7 @@ function saveSkin(s){ try{ putOne('meta',{id:'skin',value:s}); }catch(_){} }
 
 async function loadSkin(){
   let s=null; try{ const m=await getOne('meta','skin'); if(m&&m.value) s=m.value; }catch(_){}
-  if(!s||!SKIN_DEFS[s.skin]) s={skin:'BC',pal:'classic',dBg:'mountain',dImg:null,dMode:'cover'};
+  if(!s||!SKIN_DEFS[s.skin]) s={skin:'E',pal:'ice',dBg:'mountain',dImg:null,dMode:'cover'};
   if(!SKIN_DEFS[s.skin].pals.some(p=>p[0]===s.pal)) s.pal=SKIN_DEFS[s.skin].pals[0][0];
   curSkin=s; applySkin(s);
 }
@@ -3734,7 +3734,7 @@ function renderBgRow(){
 function closeSkinModal(){ const o=document.getElementById('skin-overlay'); if(o) o.remove(); }
 function openSkinModal(){
   const root=document.getElementById('modal-root'); if(!root) return;
-  const s=curSkin||{skin:'BC',pal:'classic',dBg:'mountain',dImg:null,dMode:'cover'};
+  const s=curSkin||{skin:'E',pal:'ice',dBg:'mountain',dImg:null,dMode:'cover'};
   let html='<div class="overlay" id="skin-overlay"><div class="modal" style="width:min(660px,100%)">'
     +'<h3>🎨 皮肤设置 <small>切换风格与配色，自动保存、刷新不变</small></h3>';
   html+='<div class="skin-section"><span class="lbl">布局风格（每类风格有自己专属的配色家族）</span><div class="skin-row" id="skin-layout-row">';

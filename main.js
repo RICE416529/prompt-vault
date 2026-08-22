@@ -96,13 +96,13 @@ function createWindow(url) {
     height: 860,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#0d0614',
-    // 用 hidden 标题栏 + 自定义深色 overlay，与应用主体颜色统一
+    backgroundColor: '#e3edf6',
+    // 用 hidden 标题栏 + 自定义浅色 overlay，与应用主体颜色统一（默认皮肤 E 明亮科技玻璃）
     // （HTML 里再叠一个居中标题 div，系统按钮区在右上）
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0d0614',          // 默认皮肤 BC 玻璃霓虹的标题栏底色
-      symbolColor: '#ffe9f6',    // 系统按钮（最小化/最大化/关闭）颜色
+      color: '#e3edf6',          // 默认皮肤 E 明亮科技玻璃的标题栏底色
+      symbolColor: '#334455',    // 系统按钮（最小化/最大化/关闭）颜色
       height: 32                 // 高度（HTML 标题栏 div 同步这个值）
     },
     title: 'AI创作资产库',
